@@ -15,7 +15,7 @@
 ##   modules/noise_report.R             <- Abiotic noise monitoring
 ##   data/Species_Database.xlsx         <- CT species lookup table
 ##
-## Runs locally via launcher: shiny::runGitHub("CamphoraToolkit", "camphora-ecology")
+## Runs locally via launcher: shiny::runGitHub("CamphoraToolkit", "JoejynWan")
 ## Or directly:               shiny::runApp(".")
 
 library(fs)
@@ -687,7 +687,7 @@ ui <- page_navbar(
 
   nav_spacer(),
   nav_item(
-    tags$a(href = "https://github.com/camphora-ecology/CamphoraToolkit",
+    tags$a(href = "https://github.com/JoejynWan/CamphoraToolkit",
            target = "_blank",
            bsicons::bs_icon("github"), " GitHub")
   )
