@@ -13,6 +13,6 @@ if (length(missing)) install.packages(missing)
 
 shiny::runGitHub(
   repo     = "CamphoraToolkit",
-  username = "camphora-ecology",   # update to the actual GitHub org/username
+  username = "JoejynWan",
   ref      = "HEAD"                # always runs the latest on the default branch
 )
