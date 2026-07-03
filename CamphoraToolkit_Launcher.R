@@ -6,10 +6,17 @@
 required <- c(
   "shiny", "shinyFiles", "fs", "bslib", "bsicons",
   "tidyverse", "openxlsx", "tools",
-  "exifr", "zip", "batch", "vegan", "RSQLite", "parallel", "camtrapR"
+  "exifr", "zip", "batch", "vegan", "RSQLite", "parallel", "camtrapR",
+  "rlang", "knitr", "rmarkdown", "magick", "pbapply"
 )
 missing  <- required[!required %in% rownames(installed.packages())]
 if (length(missing)) install.packages(missing)
+
+# NOTE: rmarkdown::render() to Word (Arbo Report) needs Pandoc, and exifr needs
+# ExifTool, and magick needs ImageMagick. These are system dependencies, not R
+# packages, so install.packages() above does NOT cover them. RStudio bundles
+# its own Pandoc; running this launcher outside RStudio may need Pandoc
+# installed separately (https://pandoc.org/installing.html).
 
 shiny::runGitHub(
   repo     = "CamphoraToolkit",

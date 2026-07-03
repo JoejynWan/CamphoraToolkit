@@ -4,18 +4,25 @@ rm(list = ls())
 ## Set the working directory to the folder containing this script
 setwd("C:/Users/Joejyn/OneDrive/Camphora/Data_analysis/CamphoraToolkitHub_Git/")
 
-source("modules/utils.R")
-source("CT_Step1_ExtractExif.R")
-source("CT_Step2_MergeExifs.R")
-source("CT_Step3_IndpDets.R")
-source("modules/water_report.R")
-source("modules/noise_report.R")
+source("apps/CameraTrapProcessing/modules/utils.R")
+source("apps/CameraTrapProcessing/CT_Step1_ExtractExif.R")
+source("apps/CameraTrapProcessing/CT_Step2_MergeExifs.R")
+source("apps/CameraTrapProcessing/CT_Step3_IndpDets.R")
+source("apps/AbioticMonitoring/water_report.R")
+source("apps/AbioticMonitoring/noise_report.R")
+source("apps/ImpactAssessment/modules/utils.R")
+source("apps/ImpactAssessment/modules/impact_assessment.R")
+source("apps/ArboReport/modules/utils.R")
+source("apps/ArboReport/modules/generate_report.R")
+source("apps/ArboReport/modules/resize_photos.R")
 
 library(tools)
 
 
 #### Fixed Variables ####
-SPECIES_DB_PATH <- "data/Species_Database.xlsx"
+SPECIES_DB_PATH <- "apps/CameraTrapProcessing/data/Species_Database.xlsx"
+IA_MATRIX_PATH  <- "apps/ImpactAssessment/data/ConsequenceSignificanceMatrix.xlsx"
+ARBO_RMD_PATH   <- "apps/ArboReport/arboreport_full.Rmd"
 
 
 #### CT Step 1: EXIF Extraction ####
@@ -72,3 +79,52 @@ location      <- "Site Name"
 monitoring_pt <- "N1"
 
 noise_report(location, monitoring_pt, path_noise, path_calibration)
+
+
+#### Fauna Impact Assessment ####
+## Uncomment and fill in paths before running
+# path_species_list   <- "Z:/path/to/species_list.xlsx"
+# path_fauna_database <- "Z:/path/to/Combined_Fauna_Database.xlsx"
+
+output_path <- paste0(tools::file_path_sans_ext(path_species_list), "_output.xlsx")
+
+run_impact_assessment(
+  species_list_path   = path_species_list,
+  fauna_database_path = path_fauna_database,
+  matrix_path          = IA_MATRIX_PATH,
+  output_path          = output_path
+)
+
+
+#### Arbo Report: Resize Photos ####
+## Uncomment and fill in paths before running
+# arbo_photo_dir          <- "Z:/path/to/original/photos"
+# arbo_resized_photos_dir <- "Z:/path/to/resized/photos"
+
+resize_arbo_photos(
+  photo_dir          = arbo_photo_dir,
+  resized_photos_dir = arbo_resized_photos_dir,
+  photo_size          = 400
+)
+
+
+#### Arbo Report: Generate Report ####
+## Uncomment and fill in paths before running
+# path_arbo_biodata <- "Z:/path/to/Arbo_Data_Combined.csv"
+
+## [Optional] Set to NULL to generate the report without photos
+# arbo_resized_photos_dir <- "Z:/path/to/resized/photos"
+arbo_photo_prefix <- "UWCSEA_Photos"
+
+run_arbo_report(
+  path_biodata        = path_arbo_biodata,
+  rmd_path             = ARBO_RMD_PATH,
+  output_dir           = "apps/ArboReport/results",
+  resized_photos_dir   = arbo_resized_photos_dir,
+  photo_prefix         = arbo_photo_prefix,
+  report_size          = 100,      # trees per report
+  select_ids           = NULL,     # e.g. c("12", "15", "20A") to select specific trees
+  incl_crown_spread    = FALSE,
+  sort_site            = FALSE,
+  date_format          = "%d/%m/%Y"
+)

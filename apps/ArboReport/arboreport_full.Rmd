@@ -1,0 +1,39 @@
+---
+output:
+  word_document:
+    reference_docx: data/arboreport_template.docx
+params:
+  biodata: NULL
+  resized_photos_dir: NULL
+  photo_prefix: NULL
+  incl_crown_spread: NULL
+---
+```{r setup, include=FALSE}
+
+options(knitr.duplicate.label = "allow")
+
+```
+
+```{r full report, echo=FALSE, results='asis'}
+
+render_one <- function(row_idx, biodata, resized_photos_dir, photo_prefix, incl_crown_spread){
+  tryCatch({
+    biodata_row = params$biodata[row_idx, ]
+    
+    knitr::knit_child("arboreport_onetree.Rmd", 
+                      envir = environment())
+  }, error = function(e) {
+    message("Error in row ", row_idx, ": ", conditionMessage(e))
+    return(paste0("<!-- Error in row ", row_idx, ": ", conditionMessage(e), " -->"))
+  })
+}
+
+report <- lapply(1:nrow(biodata), render_one, 
+                 biodata = biodata, 
+                 resized_photos_dir = resized_photos_dir, 
+                 photo_prefix = photo_prefix, 
+                 incl_crown_spread = incl_crown_spread) 
+
+cat(unlist(report), sep = '  \n \\pagebreak')
+
+```

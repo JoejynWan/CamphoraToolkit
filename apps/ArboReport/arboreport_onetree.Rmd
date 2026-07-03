@@ -1,0 +1,340 @@
+---
+output:
+  word_document: 
+    reference_docx: "data/arboreport_template.docx"
+params:
+  biodata_row: NULL
+  resized_photos_dir: NULL
+  photo_prefix: NULL
+  incl_crown_spread: NULL
+editor_options:
+  chunk_output_type: console
+---
+
+```{r summary table, include=FALSE}
+knitr::opts_chunk$set(fig.retina = .25)
+
+tag_id <- biodata_row$Tree.ID
+girth <- biodata_row$Girth..spread..m.
+height <- biodata_row$Height..m.
+insp_date <- as.character(biodata_row$Date)
+site <- biodata_row$Site
+habit <- biodata_row$Habit
+species <- biodata_row$Species
+
+if (grepl("var\\.|subsp\\.|spp\\.|cf\\.", species)) {
+
+  # Find if its var. subsp. spp. or cf.
+  if (grepl("var\\.", species)){
+    
+    split <- strsplit(species, " var\\. ")[[1]]
+    species_full <- paste0("*", split[1], "* var. *", split[2], "*")
+    
+  } else if (grepl("subsp\\.", species)){
+    
+    split <- strsplit(species, " subsp\\. ")[[1]]
+    species_full <- paste0("*", split[1], "* subsp. *", split[2], "*")
+    
+  } else if (grepl("spp\\.", species)){
+    
+    split <- strsplit(species, " spp\\. ")[[1]]
+    species_full <- paste0("*", split[1], "* spp. *", split[2], "*")
+    
+  } else {
+    
+    if (str_detect(species, " cf\\. ")){ #cf. in the middle of genus and species
+      split <- strsplit(species, " cf\\. ")[[1]]
+      species_full <- paste0("*", split[1], "* cf. *", split[2], "*")
+    } else { #starts with cf.
+      species_full <- paste0(str_replace(species, "cf\\. ", "cf. *"), "*")
+    }
+  }
+  
+} else if (grepl("unknown|not on site|others|vegetation", tolower(species))) {
+  species_full <-  species
+} else {
+  species_full <-  paste0("*", species, "*")
+}
+
+if (incl_crown_spread){
+  crownspread <- biodata_row$Crown.Spread
+  if (is.na(habit)) {
+    df <- data.frame(V1 = c("**Tag ID:**","**Girth (m):**","**Crown Spread (m):**","**Insp date:**"),
+                     V2 = c(tag_id, girth, crownspread, insp_date),
+                     V3 = c("**Species:**", "**Height (m):**", "", "**Site:**"),
+                     V4 = c(species_full, height, "", site))
+  } else if (habit == "Strangler"){ 
+    ## Use Spread instead of Girth for stranglers
+    df <- data.frame(V1 = c("**Tag ID:**","**Spread (m):**","**Crown Spread (m):**","**Insp date:**"),
+                     V2 = c(tag_id, girth, crownspread, insp_date),
+                     V3 = c("**Species:**", "**Height (m):**", "", "**Site:**"),
+                     V4 = c(species_full, height, "", site))
+  } else {
+    df <- data.frame(V1 = c("**Tag ID:**","**Girth (m):**","**Crown Spread (m):**","**Insp date:**"),
+                     V2 = c(tag_id, girth, crownspread, insp_date),
+                     V3 = c("**Species:**", "**Height (m):**", "", "**Site:**"),
+                     V4 = c(species_full, height, "", site))
+  }
+  
+} else {
+  if (is.na(habit)){
+    df <- data.frame(V1 = c("**Tag ID:**","**Girth (m):**","**Insp date:**"),
+                 V2 = c(tag_id, girth, insp_date),
+                 V3 = c("**Species:**", "**Height (m):**", "**Site:**"),
+                 V4 = c(species_full, height, site))
+  } else if (habit == "Strangler"){
+    ## Use Spread instead of Girth for stranglers
+    df <- data.frame(V1 = c("**Tag ID:**","**Spread (m):**","**Insp date:**"),
+                     V2 = c(tag_id, girth, insp_date),
+                     V3 = c("**Species:**", "**Height (m):**", "**Site:**"),
+                     V4 = c(species_full, height, site))
+  } else {
+    df <- data.frame(V1 = c("**Tag ID:**","**Girth (m):**","**Insp date:**"),
+                     V2 = c(tag_id, girth, insp_date),
+                     V3 = c("**Species:**", "**Height (m):**", "**Site:**"),
+                     V4 = c(species_full, height, site))
+  }
+}
+
+```
+
+## Assessment for Tree `r tag_id`  
+
+```{r, echo = F, results='asis'}
+knitr::kable(df, col.names = NULL)
+```
+
+
+### Observations
+
+```{r observations, echo = F, results='asis'}
+
+## Line for tree health
+health <- tolower(biodata_row$Health)
+if (is_empty(health) | any(is.na(health))) {
+  health_line <- NA
+} else{
+  health_line <- paste("Tree displays", health, "physiological health and vigor")
+}
+
+## Line for tree form
+form <- tolower(biodata_row$Form)
+if (is_empty(form) | any(is.na(form))) {
+  form_line <- NA
+} else{
+  form_line <- paste("Tree has", form, "form")
+}
+
+## Line for crown form
+crown_form <- tolower(biodata_row$Crown.form)
+if (crown_form == "" | is.na(crown_form)) {
+  crown_line <- NA
+} else {
+  crown_line <- paste("Crown form is/has", crown_form)
+}
+
+## Line for tree lean
+lean_raw <- biodata_row$Lean 
+
+if (is_empty(lean_raw) | is.na(lean_raw)) {
+  lean_line = NA
+} else {
+  lean <- unlist(strsplit(tolower(lean_raw), ","))
+  
+  # Is the trunk leaning or bowing
+  if (any(lean %in% "bow")) {
+    lean_or_bow = " bow" 
+  } else lean_or_bow = " lean"
+  
+  # Is there self-correction
+  if (any(lean %in% "self-corrected")) {
+    self_corrected = " self-corrected" 
+  } else self_corrected = ""
+    
+  # Degree of lean or bow
+  degree_num <- unlist(regmatches(lean, gregexpr("[[:digit:]]+", lean)))
+  if (is_empty(degree_num)) degree = "" else {
+    degree = paste0(" ", degree_num, " degree")
+  }
+  
+  # Is the lean/bow acute (more than 45 degrees)
+  if (any(lean %in% "acute")) {
+    acute = " acute" 
+  } else acute = ""
+  
+  # What is the direction of the lean/bow
+  directions <- c("north", "south", "east", "west", 
+                  "northeast", "northwest", "southeast", "southwest")
+  direction_idx <- which(directions %in% lean)
+  if (is_empty(direction_idx)) direction = "" else {
+    direction = paste0(" towards ", directions[direction_idx])
+  }
+  
+  lean_line <- paste0("Trunk has a", degree, self_corrected, acute, lean_or_bow, direction)
+}
+
+## Lines from observation column
+arbo_phrases <- read.csv("data/Arboriculture_phrases_to_automate.csv")
+
+obs <- unlist(strsplit(biodata_row$Observation, ","))
+
+new_obs <- data.frame(obs=obs) %>%
+  merge(arbo_phrases, by.x = "obs", by.y = "Raw.data.assessment", all.x = T) %>%
+  mutate(new_obs = case_when(is.na(Automated.report.phrasing) ~ obs, 
+                             .default = Automated.report.phrasing)) %>%
+  pull(new_obs)
+
+if (any(new_obs %in% "U-shape bifurcation") & 
+    any(new_obs %in% "Co-dominant stems")) {
+  
+  updated_obs <- new_obs[!new_obs %in% c("U-shape bifurcation","Co-dominant stems")]
+  updated_obs <- c(updated_obs, "Co-dominant stems with U-shape bifurcation")
+  
+} else if (any(new_obs %in% "V-shape bifurcation") & 
+           any(new_obs%in%"Co-dominant stems")) {
+  
+  updated_obs <- new_obs[!new_obs %in% c("V-shape bifurcation","Co-dominant stems")]
+  updated_obs <- c(updated_obs, "Co-dominant stems with V-shape bifurcation")
+  
+} else updated_obs <- new_obs
+
+observation_lines <- sort(updated_obs)
+
+## Lines from other observation column
+other_observation_lines <- unlist(strsplit(biodata_row$Other.observations, ";"))
+
+## Combining all the different lines
+all_lines <- na.omit(c(health_line, form_line, crown_line, lean_line, observation_lines,
+                       other_observation_lines))
+
+if (all(is.na(all_lines))) {
+  cat(paste0("1. No observations."))
+} else cat(paste0("1. ", all_lines, "."), sep = "\n")
+
+
+```
+
+### Photos
+```{r photos, echo=FALSE, error = FALSE, warning=FALSE, out.height="300px", out.width="300px", results='asis'}
+
+if (!is.null(resized_photos_dir)){
+  photo_by <- trimws(biodata_row$Photos.by)
+  photo_num_input <- trimws(biodata_row$Photo.no.)
+  
+  if (is.na(photo_num_input)) cat("No photos available.") else {
+    
+    photo_nums <- unlist(strsplit(photo_num_input, ",|;|; |, "))
+
+    photo_nums_all <- c()
+    for (photo_num in photo_nums) {
+      if (grepl(photo_num, pattern = "-")) {
+        photo_from <- trimws(unlist(strsplit(photo_num, "-"))[1])
+        photo_to <- trimws(unlist(strsplit(photo_num, "-"))[2])
+
+        ## Fill in missing digits if applicable
+        photo_from_digits <- nchar(photo_from)
+        photo_to_digits <- nchar(photo_to)
+
+        if (photo_from_digits != photo_to_digits) {
+          num_missing_digits <- photo_from_digits - photo_to_digits
+          missing_digits <- substr(photo_from, 1, num_missing_digits)
+          photo_to <- paste0(missing_digits, photo_to)
+        }
+
+        photo_range <- seq(as.integer(photo_from), as.integer(photo_to))
+
+        photo_nums_all <- as.integer(c(photo_nums_all, photo_range))
+      } else {
+        photo_nums_all <- as.integer(c(photo_nums_all, photo_num))
+      }
+    }
+
+    photo_folder <- paste(photo_prefix, as.character(insp_date), photo_by,
+                          sep = "_")
+    photo_folder_resized <- file.path(resized_photos_dir, photo_folder)
+
+    photo_all <- list.files(photo_folder_resized)
+    photo_pattern <- paste(sprintf("%04d", photo_nums_all), collapse = "|")
+    photo_names <- grep(photo_pattern, photo_all, value = T)
+    photo_paths <- file.path(photo_folder_resized, photo_names)
+    
+    if (is_empty(photo_names)){
+      photo_paths = paste0(photo_paths, ":", tag_id)
+    }
+    
+    photo_paths_group <- rep(seq(1, length(photo_paths), 2),
+                             each = 2, length.out = length(photo_paths))
+    photo_paths_splits <- split(photo_paths, as.factor(photo_paths_group))
+    
+    tryCatch({
+      for (photo_paths_split in photo_paths_splits){
+        cat("\n")
+        for (photo_path in photo_paths_split){
+          cat(paste0("![](", photo_path,"){width=50%}"))
+        }
+        # photo_paths_split = unlist(photo_paths_split)
+        # print(photo_paths_split)
+        # knitr::include_graphics(photo_paths_split, error = T)
+        cat("  \n")
+      }
+    }, error = function(e) {
+      cat("Error: photos could not be found\n")
+    })
+  }
+}
+```
+
+### Assessment
+
+```{r assessment, echo = F, results='asis'}
+## Lines for conservation significance
+origin <- biodata_row$Origin
+status <- biodata_row$Status
+origin_line <- paste0("Species origin and status: ", origin, ", ", status)
+
+## Lines for storm-vulnerable species 
+storm_vul_spp <- c("Falcataria falcata", "Spathodea campanulata", "Acacia auriculiformis")
+
+if (any(species %in% storm_vul_spp)){
+  
+  storm_line <- "This species is storm-vulnerable with shallow rooting. There is a high likelihood of uprooting during strong winds and/or heavy rain."
+  
+} else storm_line <- NA
+
+## Lines for rating 
+sule <- biodata_row$SULE.Rating
+treeAZ <- biodata_row$Tree.AZ.Rating
+retention_val <- biodata_row$Retention.Value
+add_assessment <- biodata_row$Additional.assessment
+
+rating_line=paste0("Referring to SULE (Annex A) and TreeAZ (Annex B) tables, the tree is under ", 
+                   "the following categories of **", retention_val, "** retention value:")
+
+rating_scores <- c(paste0("SULE rating: ", sule), paste0("TreeAZ rating: ", treeAZ))
+
+## Combining all lines
+assessment_vec <- na.omit(c(origin_line, storm_line, add_assessment, rating_line))
+
+cat(paste0("1. ", assessment_vec), sep = "\n")
+cat(paste0("    - ", rating_scores), sep = "\n")
+
+```
+
+### Recommendations
+
+```{r recommendations, echo = F, results='asis'}
+rec <- unlist(strsplit(biodata_row$Recommendation, ",|;|; |, "))
+construction <- biodata_row$Affected.by.construction
+
+if (tolower(species) %in% "not on site/dead"){
+  rec_line = "No recommendations."
+} else if (retention_val %in% "low" | tolower(construction) %in% "yes"){
+  rec_line = "Tree may not be retained on site."
+} else if (is_empty(rec) | any(is.na(rec))){
+  rec_line = "No recommendations."
+} else rec_line = rec
+
+cat(paste0("1. ", rec_line), sep = "\n")
+
+```
+

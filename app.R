@@ -1,19 +1,28 @@
 ## app.R
 ## Camphora Toolkit Hub — unified Shiny front-end.
-## Integrates Camera Trap Processing and Abiotic Monitoring alongside the
-## project directory hub.
+## Integrates Camera Trap Processing, Abiotic Monitoring, Fauna Impact
+## Assessment, and Arbo Report alongside the project directory hub.
 ##
 ## File layout expected:
 ##   app.R
-##   CT_Step1_ExtractExif.R             <- CT Step 1 logic (sources modules/ internally)
-##   CT_Step2_MergeExifs.R              <- CT Step 2 logic
-##   CT_Step3_IndpDets.R                <- CT Step 3 logic
-##   modules/utils.R                    <- CT shared utilities
-##   modules/extract_exif_manual.R      <- CT manual-sorted extraction
-##   modules/extract_exif_timelapse.R   <- CT timelapse extraction
-##   modules/water_report.R             <- Abiotic water quality
-##   modules/noise_report.R             <- Abiotic noise monitoring
-##   data/Species_Database.xlsx         <- CT species lookup table
+##   apps/CameraTrapProcessing/CT_Step1_ExtractExif.R             <- CT Step 1 logic (sources modules/ internally)
+##   apps/CameraTrapProcessing/CT_Step2_MergeExifs.R              <- CT Step 2 logic
+##   apps/CameraTrapProcessing/CT_Step3_IndpDets.R                <- CT Step 3 logic
+##   apps/CameraTrapProcessing/modules/utils.R                    <- CT shared utilities
+##   apps/CameraTrapProcessing/modules/extract_exif_manual.R      <- CT manual-sorted extraction
+##   apps/CameraTrapProcessing/modules/extract_exif_timelapse.R   <- CT timelapse extraction
+##   apps/CameraTrapProcessing/data/Species_Database.xlsx         <- CT species lookup table
+##   apps/AbioticMonitoring/water_report.R                        <- Abiotic water quality
+##   apps/AbioticMonitoring/noise_report.R                        <- Abiotic noise monitoring
+##   apps/ImpactAssessment/modules/impact_assessment.R            <- Fauna IA core logic
+##   apps/ImpactAssessment/modules/utils.R                        <- Fauna IA shared utilities
+##   apps/ImpactAssessment/data/ConsequenceSignificanceMatrix.xlsx <- Fauna IA matrix (bundled)
+##   apps/ArboReport/modules/generate_report.R                    <- Arbo Report core logic (renders Word docs)
+##   apps/ArboReport/modules/resize_photos.R                      <- Arbo Report photo resizing
+##   apps/ArboReport/modules/utils.R                               <- Arbo Report shared utilities
+##   apps/ArboReport/arboreport_full.Rmd, arboreport_onetree.Rmd  <- Arbo Report Word templates
+##   apps/ArboReport/data/arboreport_template.docx                <- Arbo Report Word reference style (bundled)
+##   apps/ArboReport/data/Arboriculture_phrases_to_automate.csv   <- Arbo Report phrase lookup (bundled)
 ##
 ## Runs locally via launcher: shiny::runGitHub("CamphoraToolkit", "JoejynWan")
 ## Or directly:               shiny::runApp(".")
@@ -26,23 +35,35 @@ library(tools)
 library(shiny)
 library(bslib)
 library(vegan)
+library(magick)
+library(rlang)
+library(knitr)
+library(pbapply)
 library(RSQLite)
 library(bsicons)
 library(parallel)
 library(openxlsx)
 library(camtrapR)
+library(rmarkdown)
 library(tidyverse)
 library(shinyFiles)
 
-source("modules/utils.R")
-source("CT_Step1_ExtractExif.R")
-source("CT_Step2_MergeExifs.R")
-source("CT_Step3_IndpDets.R")
-source("modules/water_report.R")
-source("modules/noise_report.R")
+source("apps/CameraTrapProcessing/modules/utils.R")
+source("apps/CameraTrapProcessing/CT_Step1_ExtractExif.R")
+source("apps/CameraTrapProcessing/CT_Step2_MergeExifs.R")
+source("apps/CameraTrapProcessing/CT_Step3_IndpDets.R")
+source("apps/AbioticMonitoring/water_report.R")
+source("apps/AbioticMonitoring/noise_report.R")
+source("apps/ImpactAssessment/modules/utils.R")
+source("apps/ImpactAssessment/modules/impact_assessment.R")
+source("apps/ArboReport/modules/utils.R")
+source("apps/ArboReport/modules/generate_report.R")
+source("apps/ArboReport/modules/resize_photos.R")
 
-SPECIES_DB_PATH <- "data/Species_Database.xlsx"
-VERSION         <- "v1.0"
+SPECIES_DB_PATH <- "apps/CameraTrapProcessing/data/Species_Database.xlsx"
+IA_MATRIX_PATH  <- "apps/ImpactAssessment/data/ConsequenceSignificanceMatrix.xlsx"
+ARBO_RMD_PATH   <- "apps/ArboReport/arboreport_full.Rmd"
+VERSION         <- "v2.2"
 UPDATE_DATE     <- "2026-07-03"
 
 
@@ -54,8 +75,8 @@ PROJECTS <- list(
     title       = "Fauna IA Toolkit",
     description = "Converts recorded and probable species lists into formatted
                    Excel impact assessment templates.",
-    url         = "https://camphora.shinyapps.io/ImpactAssessment/",
-    nav_target  = NULL,
+    url         = NULL,
+    nav_target  = "impact_assessment",
     icon        = "bug",
     category    = "Fauna",
     status      = "live"
@@ -88,10 +109,10 @@ PROJECTS <- list(
     description = "Generates the Arboriculture report for each specimen complete
                    with photos from site.",
     url         = NULL,
-    nav_target  = NULL,
+    nav_target  = "arbo_report",
     icon        = "tree",
     category    = "Flora",
-    status      = "coming soon"
+    status      = "beta"
   ),
 
   list(
@@ -303,6 +324,58 @@ ui <- page_navbar(
     div(style = "padding: 0 0.5rem 3rem;",
       uiOutput("filter_bar"),
       uiOutput("project_grid")
+    )
+  ),
+
+
+  # ── Fauna Impact Assessment ──────────────────────────────────────────────
+  nav_panel(
+    title = icon_text("Impact Assessment", "bug"),
+    value = "impact_assessment",
+
+    layout_sidebar(
+      fillable = TRUE,
+
+      sidebar = sidebar(
+        width = 320,
+
+        h5("Input files", class = "fw-bold mt-1"),
+
+        fileInput(
+          "ia_species_list_file",
+          label = tooltip(
+            span("Species list (.xlsx)", bsicons::bs_icon("info-circle")),
+            "Must contain the following columns: 'Scientific.Name' column and match the expected format."
+          ),
+          accept   = ".xlsx",
+          multiple = FALSE
+        ),
+
+        fileInput(
+          "ia_fauna_db_file",
+          label = tooltip(
+            span("Fauna database (.xlsx)", bsicons::bs_icon("info-circle")),
+            "Combined fauna database containing the 'CS species impact intensity' sheet."
+          ),
+          accept   = ".xlsx",
+          multiple = FALSE
+        ),
+
+        hr(),
+        actionButton("ia_run_btn",
+                     label = tagList(bsicons::bs_icon("play-fill"), " Run Assessment"),
+                     class = "btn-primary w-100"),
+        hr(),
+        uiOutput("ia_download_ui")
+      ),
+
+      layout_column_wrap(
+        width = 1,
+        card(card_header(tagList(bsicons::bs_icon("terminal"), " Log")),
+             verbatimTextOutput("ia_log_output"), height = 200),
+        card(card_header(tagList(bsicons::bs_icon("table"), " Output preview (first 50 rows)")),
+             div(style = "overflow-x: auto;", tableOutput("ia_preview_table")))
+      )
     )
   ),
 
@@ -572,6 +645,145 @@ ui <- page_navbar(
   ),
 
 
+  # ── Arbo Report ───────────────────────────────────────────────────────────
+  nav_menu(
+    title = icon_text("Arbo Report", "tree"),
+
+    # Generate Report
+    nav_panel(
+      title = icon_text("Generate Report", "file-earmark-word"),
+      value = "arbo_report",
+
+      layout_sidebar(
+        fillable = TRUE,
+        sidebar = sidebar(
+          width = 340,
+
+          h5("Input file", class = "fw-bold mt-1"),
+          fileInput("arbo_biodata_file",
+                    label = tooltip(
+                      span("Tree biodata (.csv)", bsicons::bs_icon("info-circle")),
+                      "Combined arbo assessment export. Must contain Tree.ID, Date, Species, and other assessment columns."
+                    ),
+                    accept = ".csv", multiple = FALSE),
+
+          hr(),
+          h5("Photos", class = "fw-bold mt-1"),
+          checkboxInput("arbo_incl_photos", "Include photos in report", value = TRUE),
+          conditionalPanel(
+            condition = "input.arbo_incl_photos == true",
+            p(class = "mb-1",
+              tooltip(span("Resized photos folder", bsicons::bs_icon("info-circle")),
+                      "Folder containing per-inspection photo subfolders, already resized (see 'Resize Photos' tab).")),
+            shinyDirButton("arbo_photos_dir", label = "Browse...",
+                           title = "Choose resized photos directory",
+                           class = "btn-outline-secondary w-100 mb-1"),
+            verbatimTextOutput("arbo_photos_dir_display", placeholder = TRUE),
+
+            textInput("arbo_photo_prefix",
+                      label = tooltip(
+                        span("Photo folder prefix", bsicons::bs_icon("info-circle")),
+                        "Prefix used in photo folder names, e.g. 'UWCSEA_Photos' for 'UWCSEA_Photos_2026-01-13_EL'."
+                      ),
+                      placeholder = "e.g. UWCSEA_Photos")
+          ),
+
+          hr(),
+          h5("Parameters", class = "fw-bold mt-1"),
+          numericInput("arbo_report_size",
+                       label = tooltip(
+                         span("Trees per report", bsicons::bs_icon("info-circle")),
+                         "Number of trees included in each generated Word document."
+                       ),
+                       value = 100, min = 1, step = 1),
+
+          textInput("arbo_select_ids",
+                    label = tooltip(
+                      span("Select Tree IDs (optional)", bsicons::bs_icon("info-circle")),
+                      "Comma-separated Tree.ID values to include. Leave blank to include all trees."
+                    ),
+                    placeholder = "e.g. 12, 15, 20A"),
+
+          checkboxInput("arbo_incl_crown_spread", "Include crown spread", value = FALSE),
+          checkboxInput("arbo_sort_site", "Sort by site", value = FALSE),
+
+          textInput("arbo_date_format",
+                    label = tooltip(
+                      span("Date format", bsicons::bs_icon("info-circle")),
+                      "Date format of the Date column in your CSV."
+                    ),
+                    value = "%d/%m/%Y"),
+
+          hr(),
+          actionButton("arbo_run_btn",
+                       label = tagList(bsicons::bs_icon("play-fill"), " Generate Report"),
+                       class = "btn-primary w-100"),
+          hr(),
+          uiOutput("arbo_download_ui")
+        ),
+
+        layout_column_wrap(
+          width = 1,
+          card(card_header(tagList(bsicons::bs_icon("terminal"), " Log")),
+               verbatimTextOutput("arbo_log_output"), height = 200),
+          card(card_header(tagList(bsicons::bs_icon("file-earmark-word"), " Generated reports")),
+               div(style = "overflow-x: auto;", tableOutput("arbo_preview_table")))
+        )
+      )
+    ),
+
+    # Resize Photos
+    nav_panel(
+      title = icon_text("Resize Photos", "image"),
+      value = "arbo_resize",
+
+      layout_sidebar(
+        fillable = TRUE,
+        sidebar = sidebar(
+          width = 340,
+
+          h5("Input/output folders", class = "fw-bold mt-1"),
+
+          p(class = "mb-1",
+            tooltip(span("Original photos folder", bsicons::bs_icon("info-circle")),
+                    "Folder containing the original full-size site photos (searched recursively).")),
+          shinyDirButton("arbophoto_source_dir", label = "Browse...",
+                         title = "Choose original photos directory",
+                         class = "btn-outline-secondary w-100 mb-1"),
+          verbatimTextOutput("arbophoto_source_dir_display", placeholder = TRUE),
+
+          p(class = "mb-1 mt-2",
+            tooltip(span("Destination folder", bsicons::bs_icon("info-circle")),
+                    "Folder to save the resized photos into. Use this as the 'Resized photos folder' in Generate Report.")),
+          shinyDirButton("arbophoto_dest_dir", label = "Browse...",
+                         title = "Choose destination directory",
+                         class = "btn-outline-secondary w-100 mb-1"),
+          verbatimTextOutput("arbophoto_dest_dir_display", placeholder = TRUE),
+
+          hr(),
+          numericInput("arbophoto_size",
+                       label = tooltip(
+                         span("Photo size (px)", bsicons::bs_icon("info-circle")),
+                         "Target width/height in pixels after resizing."
+                       ),
+                       value = 400, min = 50, step = 50),
+
+          hr(),
+          actionButton("arbophoto_run_btn",
+                       label = tagList(bsicons::bs_icon("play-fill"), " Resize Photos"),
+                       class = "btn-primary w-100")
+        ),
+
+        layout_column_wrap(
+          width = 1,
+          card(card_header(tagList(bsicons::bs_icon("terminal"), " Log")),
+               verbatimTextOutput("arbophoto_log_output"), height = 300)
+        )
+      )
+    )
+  ),
+
+
   # ── About Tab ─────────────────────────────────────────────────────────────
   nav_panel(
     title = icon_text("About", "info-circle"),
@@ -579,6 +791,22 @@ ui <- page_navbar(
 
     layout_column_wrap(
       width = 1 / 3,
+
+      card(
+        card_header("Fauna Impact Assessment"),
+        card_body(
+          p("Converts a list of recorded and/or probable fauna species into a formatted Excel impact assessment template."),
+          tags$ol(
+            tags$li("Upload the ", strong("species list"), " (.xlsx) — must contain a ", code("Scientific Name"), " column."),
+            tags$li("Upload the ", strong("fauna database"), " (.xlsx) containing the ", em("CS species impact intensity"), " sheet."),
+            tags$li("Click ", strong("Run Assessment"), "."),
+            tags$li("Download the formatted output workbook.")
+          ),
+          hr(),
+          p(strong("Output:")),
+          tags$ul(tags$li("Receptor sheet — sensitivity, impact intensity, consequence, likelihood, significance, and residual impact columns per species/phase."))
+        )
+      ),
 
       card(
         card_header("Camera Trap — Step 1: EXIF Extraction"),
@@ -675,6 +903,39 @@ ui <- page_navbar(
             tags$li(strong("Summary Table"), " — daily max LAeq by time period (7am–7pm, 7pm–10pm, 10pm–7am)")
           )
         )
+      ),
+
+      card(
+        card_header("Arbo Report — Generate Report"),
+        card_body(
+          p("Converts tree assessment biodata into formatted Word arboriculture reports, one per batch of trees, complete with site photos."),
+          tags$ol(
+            tags$li("Upload the ", strong("tree biodata"), " (.csv) — must contain ", code("Tree.ID"), ", ", code("Date"), ", ", code("Species"), " and other assessment columns."),
+            tags$li("Optionally select the ", strong("resized photos folder"), " and enter the photo folder prefix (see Resize Photos)."),
+            tags$li("Set parameters (trees per report, crown spread, sort by site, date format)."),
+            tags$li("Click ", strong("Generate Report"), "."),
+            tags$li("Download the zipped Word document(s).")
+          ),
+          hr(),
+          p(strong("Output:")),
+          tags$ul(tags$li("One .docx per batch of trees — summary table, observations, photos, assessment, and recommendations per tree."))
+        )
+      ),
+
+      card(
+        card_header("Arbo Report — Resize Photos"),
+        card_body(
+          p("Resizes and pads site photos so Word reports stay a manageable size."),
+          tags$ol(
+            tags$li("Select the ", strong("original photos"), " folder (searched recursively)."),
+            tags$li("Select a ", strong("destination"), " folder for the resized copies."),
+            tags$li("Set the target photo size (default: 400px)."),
+            tags$li("Click ", strong("Resize Photos"), ".")
+          ),
+          hr(),
+          p(strong("Output:")),
+          tags$ul(tags$li("Resized copies saved into the destination folder, preserving the original per-inspection subfolder structure."))
+        )
       )
     ),
 
@@ -700,9 +961,12 @@ server <- function(input, output, session) {
   # ── Shared: shinyFiles volumes (all local drives including Google Drive G:) ──
   volumes <- c(Home = fs::path_home(), getVolumes()())
 
-  shinyDirChoose(input, "s1_path_processed", roots = volumes, session = session)
-  shinyDirChoose(input, "s1_path_raw",       roots = volumes, session = session)
-  shinyDirChoose(input, "s2_exif_folder",    roots = volumes, session = session)
+  shinyDirChoose(input, "s1_path_processed",     roots = volumes, session = session)
+  shinyDirChoose(input, "s1_path_raw",           roots = volumes, session = session)
+  shinyDirChoose(input, "s2_exif_folder",        roots = volumes, session = session)
+  shinyDirChoose(input, "arbo_photos_dir",       roots = volumes, session = session)
+  shinyDirChoose(input, "arbophoto_source_dir",  roots = volumes, session = session)
+  shinyDirChoose(input, "arbophoto_dest_dir",    roots = volumes, session = session)
 
 
   # ── Hub: filter bar + card grid + in-app navigation ──────────────────────
@@ -739,6 +1003,77 @@ server <- function(input, output, session) {
   observeEvent(input$hub_nav_to, {
     nav_select("main_navbar", input$hub_nav_to)
   })
+
+
+  # ── Fauna Impact Assessment ──────────────────────────────────────────────
+  ia_rv <- reactiveValues(
+    log_lines    = character(0),
+    output_path  = NULL,
+    preview_data = NULL
+  )
+  ia_log <- make_logger(ia_rv)
+
+  observeEvent(input$ia_run_btn, {
+
+    ia_rv$log_lines    <- character(0)
+    ia_rv$output_path  <- NULL
+    ia_rv$preview_data <- NULL
+
+    if (is.null(input$ia_species_list_file)) { ia_log("ERROR: No species list uploaded."); return() }
+    if (is.null(input$ia_fauna_db_file))      { ia_log("ERROR: No fauna database uploaded."); return() }
+    if (!file.exists(IA_MATRIX_PATH))         { ia_log(paste("ERROR: Matrix file not found at", IA_MATRIX_PATH)); return() }
+
+    in_path  <- file_path_sans_ext(input$ia_species_list_file$datapath)
+    out_path <- paste0(in_path, "_output.xlsx")
+
+    withProgress(message = "Running impact assessment...", value = 0, {
+      tryCatch({
+
+        run_impact_assessment(
+          species_list_path   = input$ia_species_list_file$datapath,
+          fauna_database_path = input$ia_fauna_db_file$datapath,
+          matrix_path          = IA_MATRIX_PATH,
+          output_path          = out_path,
+          log = function(msg) {
+            ia_log(msg)
+            incProgress(1 / 6)   # 6 major steps in run_impact_assessment()
+          }
+        )
+
+        ia_rv$output_path  <- out_path
+        ia_rv$preview_data <- tryCatch(
+          read.xlsx(out_path, sheet = "Receptor"),
+          error = function(e) NULL
+        )
+        ia_log("Done! Click 'Download output' to save the file.")
+
+      }, error = function(e) {
+        ia_log(paste("ERROR:", conditionMessage(e)))
+      })
+    })
+  })
+
+  output$ia_log_output <- renderText({
+    if (length(ia_rv$log_lines) == 0) "No output yet. Upload files and click Run."
+    else paste(ia_rv$log_lines, collapse = "\n")
+  })
+
+  output$ia_preview_table <- renderTable({
+    req(ia_rv$preview_data)
+    head(ia_rv$preview_data, 50)
+  }, striped = TRUE, hover = TRUE, bordered = TRUE, na = "")
+
+  output$ia_download_ui <- renderUI({
+    req(ia_rv$output_path)
+    downloadButton("ia_download_btn",
+                   label = tagList(bsicons::bs_icon("download"), " Download output (.xlsx)"),
+                   class = "btn-success w-100")
+  })
+
+  output$ia_download_btn <- downloadHandler(
+    filename = function() paste0("IA_output_", format(Sys.Date(), "%Y%m%d"), ".xlsx"),
+    content  = function(file) { req(ia_rv$output_path); file.copy(ia_rv$output_path, file) }
+  )
 
 
   # ── CT Step 1: EXIF Extraction ────────────────────────────────────────────
@@ -1123,6 +1458,150 @@ server <- function(input, output, session) {
                                  trimws(input$noise_monitoring_pt), ".xlsx"),
     content  = function(file) { req(noise_rv$output_path); file.copy(noise_rv$output_path, file) }
   )
+
+
+  # ── Arbo Report: Generate Report ─────────────────────────────────────────
+  arbo_photos_dir_sel <- reactive({
+    req(input$arbo_photos_dir)
+    parseDirPath(volumes, input$arbo_photos_dir)
+  })
+
+  output$arbo_photos_dir_display <- renderText({
+    d <- tryCatch(arbo_photos_dir_sel(), error = function(e) "")
+    if (length(d) == 0 || d == "") "No folder selected." else d
+  })
+
+  arbo_rv <- reactiveValues(
+    log_lines    = character(0),
+    zip_path     = NULL,
+    preview_data = NULL
+  )
+  arbo_log <- make_logger(arbo_rv)
+
+  observeEvent(input$arbo_run_btn, {
+    arbo_rv$log_lines    <- character(0)
+    arbo_rv$zip_path     <- NULL
+    arbo_rv$preview_data <- NULL
+
+    if (is.null(input$arbo_biodata_file)) { arbo_log("ERROR: No tree biodata CSV uploaded."); return() }
+
+    photos_dir <- NULL
+    if (isTRUE(input$arbo_incl_photos)) {
+      photos_dir <- tryCatch(arbo_photos_dir_sel(), error = function(e) "")
+      if (length(photos_dir) == 0 || photos_dir == "") { arbo_log("ERROR: Please select a resized photos folder, or uncheck 'Include photos in report'."); return() }
+      if (trimws(input$arbo_photo_prefix) == "")        { arbo_log("ERROR: Please enter the photo folder prefix."); return() }
+    }
+
+    select_ids_raw <- trimws(input$arbo_select_ids)
+    select_ids     <- if (nchar(select_ids_raw) == 0) NULL else
+                      trimws(strsplit(select_ids_raw, ",")[[1]])
+
+    withProgress(message = "Generating Arbo report(s)...", value = 0, {
+      tryCatch({
+
+        incProgress(0.1)
+        output_paths <- run_arbo_report(
+          path_biodata        = input$arbo_biodata_file$datapath,
+          rmd_path             = ARBO_RMD_PATH,
+          output_dir           = file.path(tempdir(), "arbo_reports"),
+          resized_photos_dir   = photos_dir,
+          photo_prefix         = trimws(input$arbo_photo_prefix),
+          report_size          = input$arbo_report_size,
+          select_ids           = select_ids,
+          incl_crown_spread    = isTRUE(input$arbo_incl_crown_spread),
+          sort_site            = isTRUE(input$arbo_sort_site),
+          date_format          = input$arbo_date_format,
+          log                  = arbo_log
+        )
+
+        arbo_rv$preview_data <- data.frame(`Report file` = basename(output_paths), check.names = FALSE)
+
+        zip_path <- file.path(tempdir(), "arbo_reports.zip")
+        zip::zip(zip_path, files = output_paths, mode = "cherry-pick")
+        arbo_rv$zip_path <- zip_path
+
+        incProgress(0.9)
+        arbo_log("Done! All reports zipped. Click 'Download' to save.")
+
+      }, error = function(e) arbo_log(paste("ERROR:", conditionMessage(e))))
+    })
+  })
+
+  output$arbo_log_output <- renderText({
+    if (length(arbo_rv$log_lines) == 0) "No output yet. Upload biodata and click Generate Report."
+    else paste(arbo_rv$log_lines, collapse = "\n")
+  })
+
+  output$arbo_preview_table <- renderTable({
+    req(arbo_rv$preview_data)
+    arbo_rv$preview_data
+  }, striped = TRUE, hover = TRUE, bordered = TRUE, na = "")
+
+  output$arbo_download_ui <- renderUI({
+    req(arbo_rv$zip_path)
+    downloadButton("arbo_download_btn",
+                   label = tagList(bsicons::bs_icon("download"), " Download reports (.zip)"),
+                   class = "btn-success w-100")
+  })
+
+  output$arbo_download_btn <- downloadHandler(
+    filename = function() "arbo_reports.zip",
+    content  = function(file) { req(arbo_rv$zip_path); file.copy(arbo_rv$zip_path, file) }
+  )
+
+
+  # ── Arbo Report: Resize Photos ───────────────────────────────────────────
+  arbophoto_source_dir_sel <- reactive({
+    req(input$arbophoto_source_dir)
+    parseDirPath(volumes, input$arbophoto_source_dir)
+  })
+
+  arbophoto_dest_dir_sel <- reactive({
+    req(input$arbophoto_dest_dir)
+    parseDirPath(volumes, input$arbophoto_dest_dir)
+  })
+
+  output$arbophoto_source_dir_display <- renderText({
+    d <- tryCatch(arbophoto_source_dir_sel(), error = function(e) "")
+    if (length(d) == 0 || d == "") "No folder selected." else d
+  })
+
+  output$arbophoto_dest_dir_display <- renderText({
+    d <- tryCatch(arbophoto_dest_dir_sel(), error = function(e) "")
+    if (length(d) == 0 || d == "") "No folder selected." else d
+  })
+
+  arbophoto_rv <- reactiveValues(log_lines = character(0))
+  arbophoto_log <- make_logger(arbophoto_rv)
+
+  observeEvent(input$arbophoto_run_btn, {
+    arbophoto_rv$log_lines <- character(0)
+
+    source_dir <- tryCatch(arbophoto_source_dir_sel(), error = function(e) "")
+    dest_dir   <- tryCatch(arbophoto_dest_dir_sel(),   error = function(e) "")
+
+    if (length(source_dir) == 0 || source_dir == "") { arbophoto_log("ERROR: Please select the original photos folder."); return() }
+    if (length(dest_dir)   == 0 || dest_dir   == "") { arbophoto_log("ERROR: Please select a destination folder.");        return() }
+
+    withProgress(message = "Resizing photos...", value = 0, {
+      tryCatch({
+        incProgress(0.1)
+        resize_arbo_photos(
+          photo_dir          = source_dir,
+          resized_photos_dir = dest_dir,
+          photo_size          = input$arbophoto_size,
+          log                 = arbophoto_log
+        )
+        incProgress(0.9)
+
+      }, error = function(e) arbophoto_log(paste("ERROR:", conditionMessage(e))))
+    })
+  })
+
+  output$arbophoto_log_output <- renderText({
+    if (length(arbophoto_rv$log_lines) == 0) "No output yet. Select folders and click Resize Photos."
+    else paste(arbophoto_rv$log_lines, collapse = "\n")
+  })
 }
 
 
