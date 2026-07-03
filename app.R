@@ -65,12 +65,14 @@ source("apps/ArboReport/modules/resize_photos.R")
 SPECIES_DB_PATH <- "apps/CameraTrapProcessing/data/Species_Database.xlsx"
 IA_MATRIX_PATH  <- "apps/ImpactAssessment/data/ConsequenceSignificanceMatrix.xlsx"
 ARBO_RMD_PATH   <- "apps/ArboReport/arboreport_full.Rmd"
-VERSION         <- "v2.2"
+VERSION         <- "v2.3"
 UPDATE_DATE     <- "2026-07-03"
 
 
 # ── Project Registry ────────────────────────────────────────────────────────
 # nav_target: value of a nav_panel in this app; NULL = external url or disabled
+# version/updated: per-app tracking only (independent of the Hub's own VERSION
+# above) — bump these whenever that app's own logic/tabs change.
 PROJECTS <- list(
 
   list(
@@ -81,7 +83,9 @@ PROJECTS <- list(
     nav_target  = "impact_assessment",
     icon        = "bug",
     category    = "Fauna",
-    status      = "live"
+    status      = "live",
+    version     = "v2.2",
+    updated     = "2026-07-03"
   ),
 
   list(
@@ -92,7 +96,9 @@ PROJECTS <- list(
     nav_target  = "water",
     icon        = "moisture",
     category    = "Abiotic",
-    status      = "live"
+    status      = "live",
+    version     = "v1.1",
+    updated     = "2026-04-08"
   ),
 
   list(
@@ -103,7 +109,9 @@ PROJECTS <- list(
     nav_target  = "ct_step1",
     icon        = "camera",
     category    = "Fauna",
-    status      = "beta"
+    status      = "beta",
+    version     = "v2.1",
+    updated     = "2026-07-03"
   ),
 
   list(
@@ -114,7 +122,9 @@ PROJECTS <- list(
     nav_target  = "arbo_report",
     icon        = "tree",
     category    = "Flora",
-    status      = "beta"
+    status      = "beta",
+    version     = "v1.0",
+    updated     = "2026-07-03"
   ),
 
   list(
@@ -125,7 +135,9 @@ PROJECTS <- list(
     nav_target  = NULL,
     icon        = "water",
     category    = "Fauna",
-    status      = "coming soon"
+    status      = "coming soon",
+    version     = NA,
+    updated     = NA
   )
 
   ## ── Paste new entries below this line ──────────────────────────────────────
@@ -137,7 +149,9 @@ PROJECTS <- list(
   #   nav_target  = "my_tab_value",   # or url = "https://..." if external
   #   icon        = "bar-chart",
   #   category    = "Category",
-  #   status      = "live"
+  #   status      = "live",
+  #   version     = "v1.0",
+  #   updated     = "YYYY-MM-DD"
   # ),
 
 )
@@ -160,6 +174,31 @@ make_logger <- function(rv) {
 # ── Hub helpers ──────────────────────────────────────────────────────────────
 
 all_categories <- function() sort(unique(sapply(PROJECTS, `[[`, "category")))
+
+## Looks up a project's own version/updated metadata by its nav_target, for
+## display on Hub cards and in the About page. Returns NULL if not found.
+get_project_meta <- function(nav_target) {
+  match <- Filter(function(p) identical(p$nav_target, nav_target), PROJECTS)
+  if (length(match) == 0) NULL else match[[1]]
+}
+
+## "v1.0 · 2026-07-03", or "" if version/updated are NA (e.g. coming soon)
+project_version_label <- function(p) {
+  if (is.null(p$version) || is.na(p$version)) return("")
+  paste0(p$version, if (!is.null(p$updated) && !is.na(p$updated)) paste0(" · ", p$updated) else "")
+}
+
+## Panel title for the About page's accordion — app name + icon + version, so
+## adding a new app only means adding one more accordion_panel, not rewriting
+## a flat card grid.
+about_panel_title <- function(app_title, nav_target, icon_name) {
+  meta  <- get_project_meta(nav_target)
+  label <- if (!is.null(meta)) project_version_label(meta) else ""
+  tagList(
+    bsicons::bs_icon(icon_name), " ", app_title,
+    if (nzchar(label)) tags$span(class = "text-muted small fw-normal ms-2", label)
+  )
+}
 
 status_badge <- function(status) {
   cfg <- switch(status,
@@ -187,7 +226,9 @@ project_card <- function(p) {
       ),
       div(class = "proj-category", p$category),
       h5(class  = "proj-title",    p$title),
-      p(class   = "proj-desc",     p$description)
+      p(class   = "proj-desc",     p$description),
+      if (nzchar(project_version_label(p)))
+        p(class = "proj-version text-muted small mb-0", project_version_label(p))
     ),
 
     card_footer(
@@ -832,172 +873,207 @@ ui <- page_navbar(
 
 
   # ── About Tab ─────────────────────────────────────────────────────────────
+  # One accordion_panel per app, grouping that app's cards — adding a new app
+  # means adding one more accordion_panel(), not editing a flat card grid.
   nav_panel(
     title = icon_text("About", "info-circle"),
     value = "about",
 
-    layout_column_wrap(
-      width = 1 / 3,
+    accordion(
+      id   = "about_accordion",
+      open = FALSE,
 
-      card(
-        card_header("Fauna Impact Assessment"),
-        card_body(
-          p("Converts a list of recorded and/or probable fauna species into a formatted Excel impact assessment template."),
-          tags$ol(
-            tags$li("Upload the ", strong("species list"), " (.xlsx) — must contain a ", code("Scientific Name"), " column."),
-            tags$li("Upload the ", strong("fauna database"), " (.xlsx) containing the ", em("CS species impact intensity"), " sheet."),
-            tags$li("Click ", strong("Run Assessment"), "."),
-            tags$li("Download the formatted output workbook.")
-          ),
-          hr(),
-          p(strong("Output:")),
-          tags$ul(tags$li("Receptor sheet — sensitivity, impact intensity, consequence, likelihood, significance, and residual impact columns per species/phase."))
-        )
-      ),
+      accordion_panel(
+        value = "about_ia",
+        title = about_panel_title("Fauna IA Toolkit", "impact_assessment", "bug"),
 
-      card(
-        card_header("Camera Trap — Step 1: EXIF Extraction"),
-        card_body(
-          p("Extracts and merges metadata from processed (Timelapse / manually sorted) and raw video folders."),
-          tags$ol(
-            tags$li("Select the ", strong("processed"), " folder (.ddb files or sorted species folders)."),
-            tags$li("Select the ", strong("raw"), " folder (original video files)."),
-            tags$li("Click ", strong("Run"), "."),
-            tags$li("Download the ", code("*_exif.csv"), " output.")
-          ),
-          hr(),
-          p(strong("Output:")),
-          tags$ul(tags$li("One CSV per station — Station, SamplingDate, FileModifyDate, Date, Time, FileName, Genus, Species, ScientificName, Quantity, Remarks."))
-        )
-      ),
-
-      card(
-        card_header("Camera Trap — Step 1.1: Offset DateTime"),
-        card_body(
-          p("Corrects FileModifyDate/Date/Time in a Step 1 exif.csv when the camera's clock was wrong at the time of recording."),
-          tags$ol(
-            tags$li("Upload the ", code("*_exif.csv"), " from Step 1."),
-            tags$li("Enter either an ", strong("hour offset"), " (e.g. -12) or the ", strong("correct DateTime of the first video"), " (e.g. 2025-11-13 08:00:00)."),
-            tags$li("Click ", strong("Apply Offset"), "."),
-            tags$li("Download the corrected ", code("*_offset_exif.csv"), " output.")
-          ),
-          hr(),
-          p(strong("Output:")),
-          tags$ul(tags$li("Same CSV as Step 1, with FileModifyDate/Date/Time shifted by the offset."))
-        )
-      ),
-
-      card(
-        card_header("Camera Trap — Step 2: Merge EXIFs"),
-        card_body(
-          p("Combines multiple station EXIF CSVs into a single dataset and filters to target mammals."),
-          tags$ol(
-            tags$li("Select the folder containing all ", code("*_exif.csv"), " files from Step 1."),
-            tags$li("Optionally upload a manually corrected ", code("combined_exif_all.csv"), "."),
-            tags$li("Click ", strong("Run Merge"), "."),
-            tags$li("Download outputs.")
-          ),
-          hr(),
-          p(strong("Outputs:")),
-          tags$ul(
-            tags$li(code("combined_exif_all.csv"), " — all species combined"),
-            tags$li(code("combined_exif_mammals_only.csv"), " — target mammals only")
+        card(
+          card_header("Impact Assessment"),
+          card_body(
+            p("Converts a list of recorded and/or probable fauna species into a formatted Excel impact assessment template."),
+            tags$ol(
+              tags$li("Upload the ", strong("species list"), " (.xlsx) — must contain a ", code("Scientific Name"), " column."),
+              tags$li("Upload the ", strong("fauna database"), " (.xlsx) containing the ", em("CS species impact intensity"), " sheet."),
+              tags$li("Click ", strong("Run Assessment"), "."),
+              tags$li("Download the formatted output workbook.")
+            ),
+            hr(),
+            p(strong("Output:")),
+            tags$ul(tags$li("Receptor sheet — sensitivity, impact intensity, consequence, likelihood, significance, and residual impact columns per species/phase."))
           )
         )
       ),
 
-      card(
-        card_header("Camera Trap — Step 3: Independent Detections"),
-        card_body(
-          p("Groups records into independent detections by station and species, then generates summary tables."),
-          tags$ol(
-            tags$li("Upload ", code("combined_exif_all.csv"), " from Step 2."),
-            tags$li("Set the ", strong("independence interval"), " (default: 3600 s = 1 hour)."),
-            tags$li("Optionally list stations to exclude."),
-            tags$li("Click ", strong("Run Analysis"), ".")
+      accordion_panel(
+        value = "about_ct",
+        title = about_panel_title("Camera Trap Processing", "ct_step1", "camera"),
+
+        layout_column_wrap(
+          width = 1 / 2,
+
+          card(
+            card_header("Step 1: EXIF Extraction"),
+            card_body(
+              p("Extracts and merges metadata from processed (Timelapse / manually sorted) and raw video folders."),
+              tags$ol(
+                tags$li("Select the ", strong("processed"), " folder (.ddb files or sorted species folders)."),
+                tags$li("Select the ", strong("raw"), " folder (original video files)."),
+                tags$li("Click ", strong("Run"), "."),
+                tags$li("Download the ", code("*_exif.csv"), " output.")
+              ),
+              hr(),
+              p(strong("Output:")),
+              tags$ul(tags$li("One CSV per station — Station, SamplingDate, FileModifyDate, Date, Time, FileName, Genus, Species, ScientificName, Quantity, Remarks."))
+            )
           ),
-          hr(),
-          p(strong("Outputs (zipped):")),
-          tags$ul(
-            tags$li(code("ct_indp_det_full.csv")),
-            tags$li(code("ct_indp_det.csv")),
-            tags$li(code("ct_indp_det_species_summary.csv")),
-            tags$li(code("ct_indp_det_station_summary.csv")),
-            tags$li(code("ct_species_detection.xlsx")),
-            tags$li(code("ct_indp_det_wildboar_summary.csv"), " (if Sus scrofa present)"),
-            tags$li(code("ct_arboreal.xlsx"), " (if crossing remarks present)")
+
+          card(
+            card_header("Step 1.1: Offset DateTime"),
+            card_body(
+              p("Corrects FileModifyDate/Date/Time in a Step 1 exif.csv when the camera's clock was wrong at the time of recording."),
+              tags$ol(
+                tags$li("Upload the ", code("*_exif.csv"), " from Step 1."),
+                tags$li("Enter either an ", strong("hour offset"), " (e.g. -12) or the ", strong("correct DateTime of the first video"), " (e.g. 2025-11-13 08:00:00)."),
+                tags$li("Click ", strong("Apply Offset"), "."),
+                tags$li("Download the corrected ", code("*_offset_exif.csv"), " output.")
+              ),
+              hr(),
+              p(strong("Output:")),
+              tags$ul(tags$li("Same CSV as Step 1, with FileModifyDate/Date/Time shifted by the offset."))
+            )
+          ),
+
+          card(
+            card_header("Step 2: Merge EXIFs"),
+            card_body(
+              p("Combines multiple station EXIF CSVs into a single dataset and filters to target mammals."),
+              tags$ol(
+                tags$li("Select the folder containing all ", code("*_exif.csv"), " files from Step 1."),
+                tags$li("Optionally upload a manually corrected ", code("combined_exif_all.csv"), "."),
+                tags$li("Click ", strong("Run Merge"), "."),
+                tags$li("Download outputs.")
+              ),
+              hr(),
+              p(strong("Outputs:")),
+              tags$ul(
+                tags$li(code("combined_exif_all.csv"), " — all species combined"),
+                tags$li(code("combined_exif_mammals_only.csv"), " — target mammals only")
+              )
+            )
+          ),
+
+          card(
+            card_header("Step 3: Independent Detections"),
+            card_body(
+              p("Groups records into independent detections by station and species, then generates summary tables."),
+              tags$ol(
+                tags$li("Upload ", code("combined_exif_all.csv"), " from Step 2."),
+                tags$li("Set the ", strong("independence interval"), " (default: 3600 s = 1 hour)."),
+                tags$li("Optionally list stations to exclude."),
+                tags$li("Click ", strong("Run Analysis"), ".")
+              ),
+              hr(),
+              p(strong("Outputs (zipped):")),
+              tags$ul(
+                tags$li(code("ct_indp_det_full.csv")),
+                tags$li(code("ct_indp_det.csv")),
+                tags$li(code("ct_indp_det_species_summary.csv")),
+                tags$li(code("ct_indp_det_station_summary.csv")),
+                tags$li(code("ct_species_detection.xlsx")),
+                tags$li(code("ct_indp_det_wildboar_summary.csv"), " (if Sus scrofa present)"),
+                tags$li(code("ct_arboreal.xlsx"), " (if crossing remarks present)")
+              )
+            )
           )
         )
       ),
 
-      card(
-        card_header("Abiotic — Water Monitoring"),
-        card_body(
-          p("Processes raw CSV exports from EXO2 field water quality loggers into a formatted Excel worksheet."),
-          tags$ol(
-            tags$li("Upload the ", strong("raw in-situ CSV"), " from the logger."),
-            tags$li("Set the ", strong("time threshold"), " (default: 2 mins)."),
-            tags$li("Click ", strong("Run Report"), ".")
+      accordion_panel(
+        value = "about_abiotic",
+        title = about_panel_title("Abiotic Monitoring Toolkit", "water", "moisture"),
+
+        layout_column_wrap(
+          width = 1 / 2,
+
+          card(
+            card_header("Water Monitoring"),
+            card_body(
+              p("Processes raw CSV exports from EXO2 field water quality loggers into a formatted Excel worksheet."),
+              tags$ol(
+                tags$li("Upload the ", strong("raw in-situ CSV"), " from the logger."),
+                tags$li("Set the ", strong("time threshold"), " (default: 2 mins)."),
+                tags$li("Click ", strong("Run Report"), ".")
+              ),
+              hr(),
+              p(strong("Output sheet:"), " In-Situ Measurements"),
+              tags$ul(
+                tags$li("Metadata header (project name, staff, equipment)"),
+                tags$li("Point No., Date, Time, Depth, Weather Condition"),
+                tags$li("Conductivity, Dissolved Oxygen, pH, Salinity, Temperature, Turbidity")
+              )
+            )
           ),
-          hr(),
-          p(strong("Output sheet:"), " In-Situ Measurements"),
-          tags$ul(
-            tags$li("Metadata header (project name, staff, equipment)"),
-            tags$li("Point No., Date, Time, Depth, Weather Condition"),
-            tags$li("Conductivity, Dissolved Oxygen, pH, Salinity, Temperature, Turbidity")
+
+          card(
+            card_header("Noise Monitoring"),
+            card_body(
+              p("Calculates LAeq 1h, LAeq 12h and per-period maxima from raw 5-minute noise data."),
+              tags$ol(
+                tags$li("Upload the ", strong("noise CSV"), " (5-min Leq readings)."),
+                tags$li("Upload the ", strong("calibration CSV"), "."),
+                tags$li("Enter ", strong("site location"), " and ", strong("monitoring point"), "."),
+                tags$li("Click ", strong("Run Report"), ".")
+              ),
+              hr(),
+              p(strong("Output sheets:")),
+              tags$ul(
+                tags$li(strong("Noise Data"), " — calibration info + LAeq 5min/1h/12h table"),
+                tags$li(strong("Summary Table"), " — daily max LAeq by time period (7am–7pm, 7pm–10pm, 10pm–7am)")
+              )
+            )
           )
         )
       ),
 
-      card(
-        card_header("Abiotic — Noise Monitoring"),
-        card_body(
-          p("Calculates LAeq 1h, LAeq 12h and per-period maxima from raw 5-minute noise data."),
-          tags$ol(
-            tags$li("Upload the ", strong("noise CSV"), " (5-min Leq readings)."),
-            tags$li("Upload the ", strong("calibration CSV"), "."),
-            tags$li("Enter ", strong("site location"), " and ", strong("monitoring point"), "."),
-            tags$li("Click ", strong("Run Report"), ".")
+      accordion_panel(
+        value = "about_arbo",
+        title = about_panel_title("Arbo Report", "arbo_report", "tree"),
+
+        layout_column_wrap(
+          width = 1 / 2,
+
+          card(
+            card_header("Generate Report"),
+            card_body(
+              p("Converts tree assessment biodata into formatted Word arboriculture reports, one per batch of trees, complete with site photos."),
+              tags$ol(
+                tags$li("Upload the ", strong("tree biodata"), " (.csv) — must contain ", code("Tree.ID"), ", ", code("Date"), ", ", code("Species"), " and other assessment columns."),
+                tags$li("Optionally select the ", strong("resized photos folder"), " and enter the photo folder prefix (see Resize Photos)."),
+                tags$li("Set parameters (trees per report, crown spread, sort by site, date format)."),
+                tags$li("Click ", strong("Generate Report"), "."),
+                tags$li("Download the zipped Word document(s).")
+              ),
+              hr(),
+              p(strong("Output:")),
+              tags$ul(tags$li("One .docx per batch of trees — summary table, observations, photos, assessment, and recommendations per tree."))
+            )
           ),
-          hr(),
-          p(strong("Output sheets:")),
-          tags$ul(
-            tags$li(strong("Noise Data"), " — calibration info + LAeq 5min/1h/12h table"),
-            tags$li(strong("Summary Table"), " — daily max LAeq by time period (7am–7pm, 7pm–10pm, 10pm–7am)")
+
+          card(
+            card_header("Resize Photos"),
+            card_body(
+              p("Resizes and pads site photos so Word reports stay a manageable size."),
+              tags$ol(
+                tags$li("Select the ", strong("original photos"), " folder (searched recursively)."),
+                tags$li("Select a ", strong("destination"), " folder for the resized copies."),
+                tags$li("Set the target photo size (default: 400px)."),
+                tags$li("Click ", strong("Resize Photos"), ".")
+              ),
+              hr(),
+              p(strong("Output:")),
+              tags$ul(tags$li("Resized copies saved into the destination folder, preserving the original per-inspection subfolder structure."))
+            )
           )
-        )
-      ),
-
-      card(
-        card_header("Arbo Report — Generate Report"),
-        card_body(
-          p("Converts tree assessment biodata into formatted Word arboriculture reports, one per batch of trees, complete with site photos."),
-          tags$ol(
-            tags$li("Upload the ", strong("tree biodata"), " (.csv) — must contain ", code("Tree.ID"), ", ", code("Date"), ", ", code("Species"), " and other assessment columns."),
-            tags$li("Optionally select the ", strong("resized photos folder"), " and enter the photo folder prefix (see Resize Photos)."),
-            tags$li("Set parameters (trees per report, crown spread, sort by site, date format)."),
-            tags$li("Click ", strong("Generate Report"), "."),
-            tags$li("Download the zipped Word document(s).")
-          ),
-          hr(),
-          p(strong("Output:")),
-          tags$ul(tags$li("One .docx per batch of trees — summary table, observations, photos, assessment, and recommendations per tree."))
-        )
-      ),
-
-      card(
-        card_header("Arbo Report — Resize Photos"),
-        card_body(
-          p("Resizes and pads site photos so Word reports stay a manageable size."),
-          tags$ol(
-            tags$li("Select the ", strong("original photos"), " folder (searched recursively)."),
-            tags$li("Select a ", strong("destination"), " folder for the resized copies."),
-            tags$li("Set the target photo size (default: 400px)."),
-            tags$li("Click ", strong("Resize Photos"), ".")
-          ),
-          hr(),
-          p(strong("Output:")),
-          tags$ul(tags$li("Resized copies saved into the destination folder, preserving the original per-inspection subfolder structure."))
         )
       )
     ),
