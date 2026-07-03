@@ -202,9 +202,8 @@ ui <- page_navbar(
     base_font    = font_google("Source Sans 3"),
     heading_font = font_google("DM Serif Display")
   ),
-  id = "main_navbar",
-
-  tags$head(tags$style(HTML("
+  id     = "main_navbar",
+  header = tags$head(tags$style(HTML("
 
     body { background: #f0f4f7; }
 
