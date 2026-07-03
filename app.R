@@ -6,6 +6,7 @@
 ## File layout expected:
 ##   app.R
 ##   apps/CameraTrapProcessing/CT_Step1_ExtractExif.R             <- CT Step 1 logic (sources modules/ internally)
+##   apps/CameraTrapProcessing/CT_Step1.1_OffsetDateTime.R        <- CT Step 1.1 logic (fixes wrong camera clock in an exif.csv)
 ##   apps/CameraTrapProcessing/CT_Step2_MergeExifs.R              <- CT Step 2 logic
 ##   apps/CameraTrapProcessing/CT_Step3_IndpDets.R                <- CT Step 3 logic
 ##   apps/CameraTrapProcessing/modules/utils.R                    <- CT shared utilities
@@ -50,6 +51,7 @@ library(shinyFiles)
 
 source("apps/CameraTrapProcessing/modules/utils.R")
 source("apps/CameraTrapProcessing/CT_Step1_ExtractExif.R")
+source("apps/CameraTrapProcessing/CT_Step1.1_OffsetDateTime.R")
 source("apps/CameraTrapProcessing/CT_Step2_MergeExifs.R")
 source("apps/CameraTrapProcessing/CT_Step3_IndpDets.R")
 source("apps/AbioticMonitoring/water_report.R")
@@ -426,6 +428,51 @@ ui <- page_navbar(
                verbatimTextOutput("s1_log_output"), height = 200),
           card(card_header(tagList(bsicons::bs_icon("table"), " Output preview (first 50 rows)")),
                div(style = "overflow-x: auto;", tableOutput("s1_preview_table")))
+        )
+      )
+    ),
+
+    # Step 1.1: Offset DateTime
+    nav_panel(
+      title = icon_text("Step 1.1: Offset DateTime", "clock-history"),
+      value = "ct_step1_1",
+
+      layout_sidebar(
+        fillable = TRUE,
+        sidebar = sidebar(
+          width = 340,
+
+          h5("Input file", class = "fw-bold mt-1"),
+          fileInput("s1a_exif_file",
+                    label = tooltip(
+                      span("Exif CSV (from Step 1)", bsicons::bs_icon("info-circle")),
+                      "The *_exif.csv output from Step 1, when FileModifyDate is wrong because the camera's clock was set incorrectly."
+                    ),
+                    accept = ".csv", multiple = FALSE),
+
+          hr(),
+          h5("Offset", class = "fw-bold mt-1"),
+          textInput("s1a_offset",
+                    label = tooltip(
+                      span("Hours to offset, or correct first-video DateTime", bsicons::bs_icon("info-circle")),
+                      "Enter a number of hours (e.g. -12 or 5), OR the actual correct DateTime of the first video (e.g. 2025-11-13 08:00:00)."
+                    ),
+                    placeholder = "e.g. -12  or  2025-11-13 08:00:00"),
+
+          hr(),
+          actionButton("s1a_run_btn",
+                       label = tagList(bsicons::bs_icon("play-fill"), " Apply Offset"),
+                       class = "btn-primary w-100"),
+          hr(),
+          uiOutput("s1a_download_ui")
+        ),
+
+        layout_column_wrap(
+          width = 1,
+          card(card_header(tagList(bsicons::bs_icon("terminal"), " Log")),
+               verbatimTextOutput("s1a_log_output"), height = 200),
+          card(card_header(tagList(bsicons::bs_icon("table"), " Output preview (first 50 rows)")),
+               div(style = "overflow-x: auto;", tableOutput("s1a_preview_table")))
         )
       )
     ),
@@ -825,6 +872,22 @@ ui <- page_navbar(
       ),
 
       card(
+        card_header("Camera Trap — Step 1.1: Offset DateTime"),
+        card_body(
+          p("Corrects FileModifyDate/Date/Time in a Step 1 exif.csv when the camera's clock was wrong at the time of recording."),
+          tags$ol(
+            tags$li("Upload the ", code("*_exif.csv"), " from Step 1."),
+            tags$li("Enter either an ", strong("hour offset"), " (e.g. -12) or the ", strong("correct DateTime of the first video"), " (e.g. 2025-11-13 08:00:00)."),
+            tags$li("Click ", strong("Apply Offset"), "."),
+            tags$li("Download the corrected ", code("*_offset_exif.csv"), " output.")
+          ),
+          hr(),
+          p(strong("Output:")),
+          tags$ul(tags$li("Same CSV as Step 1, with FileModifyDate/Date/Time shifted by the offset."))
+        )
+      ),
+
+      card(
         card_header("Camera Trap — Step 2: Merge EXIFs"),
         card_body(
           p("Combines multiple station EXIF CSVs into a single dataset and filters to target mammals."),
@@ -1161,6 +1224,63 @@ server <- function(input, output, session) {
   output$s1_download_btn <- downloadHandler(
     filename = function() paste(basename(tryCatch(s1_processed_dir(), error = function(e) "station")), "exif.csv", sep = "_"),
     content  = function(file) { req(s1_rv$output_path); file.copy(s1_rv$output_path, file) }
+  )
+
+
+  # ── CT Step 1.1: Offset DateTime ─────────────────────────────────────────
+  s1a_rv <- reactiveValues(
+    log_lines    = character(0),
+    output_path  = NULL,
+    preview_data = NULL
+  )
+  s1a_log <- make_logger(s1a_rv)
+
+  observeEvent(input$s1a_run_btn, {
+    s1a_rv$log_lines    <- character(0)
+    s1a_rv$output_path  <- NULL
+    s1a_rv$preview_data <- NULL
+
+    if (is.null(input$s1a_exif_file))          { s1a_log("ERROR: No exif CSV uploaded."); return() }
+    if (trimws(input$s1a_offset) == "")        { s1a_log("ERROR: Please enter an hour offset or the correct first-video DateTime."); return() }
+
+    withProgress(message = "Applying DateTime offset...", value = 0, {
+      tryCatch({
+        incProgress(0.2)
+
+        out_path <- offset_datetime(
+          exif_path = input$s1a_exif_file$datapath,
+          offset     = trimws(input$s1a_offset),
+          log        = s1a_log
+        )
+
+        s1a_rv$output_path  <- out_path
+        s1a_rv$preview_data <- read.csv(out_path)
+        incProgress(0.8)
+
+      }, error = function(e) s1a_log(paste("ERROR:", conditionMessage(e))))
+    })
+  })
+
+  output$s1a_log_output <- renderText({
+    if (length(s1a_rv$log_lines) == 0) "No output yet. Upload an exif CSV and click Apply Offset."
+    else paste(s1a_rv$log_lines, collapse = "\n")
+  })
+
+  output$s1a_preview_table <- renderTable({
+    req(s1a_rv$preview_data)
+    head(s1a_rv$preview_data, 50)
+  }, striped = TRUE, hover = TRUE, bordered = TRUE, na = "")
+
+  output$s1a_download_ui <- renderUI({
+    req(s1a_rv$output_path)
+    downloadButton("s1a_download_btn",
+                   label = tagList(bsicons::bs_icon("download"), " Download output (.csv)"),
+                   class = "btn-success w-100")
+  })
+
+  output$s1a_download_btn <- downloadHandler(
+    filename = function() paste0(file_path_sans_ext(input$s1a_exif_file$name), "_offset_exif.csv"),
+    content  = function(file) { req(s1a_rv$output_path); file.copy(s1a_rv$output_path, file) }
   )
 
 

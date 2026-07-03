@@ -6,6 +6,7 @@ setwd("C:/Users/Joejyn/OneDrive/Camphora/Data_analysis/CamphoraToolkitHub_Git/")
 
 source("apps/CameraTrapProcessing/modules/utils.R")
 source("apps/CameraTrapProcessing/CT_Step1_ExtractExif.R")
+source("apps/CameraTrapProcessing/CT_Step1.1_OffsetDateTime.R")
 source("apps/CameraTrapProcessing/CT_Step2_MergeExifs.R")
 source("apps/CameraTrapProcessing/CT_Step3_IndpDets.R")
 source("apps/AbioticMonitoring/water_report.R")
@@ -34,6 +35,19 @@ extract_exif(
   path_processed        = path_processed,
   path_raw              = path_raw,
   path_species_database = SPECIES_DB_PATH
+)
+
+
+#### CT Step 1.1: Offset DateTime ####
+## Uncomment and fill in path before running
+# exif_path <- "Z:/path/to/station_exif.csv"
+
+## Either a number of hours (e.g. -12) or the correct DateTime of the first video
+offset <- "2025-11-13 08:00:00"
+
+offset_datetime(
+  exif_path = exif_path,
+  offset     = offset
 )
 
 

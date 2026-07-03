@@ -33,7 +33,7 @@ extract_exif <- function(path_processed, path_raw, path_species_database, log_fn
     
     ddb_paths <- ddb_paths[!grepl("Backups", ddb_paths)]
     
-    ddb_data <- lapply(ddb_paths, get_id_timelapse) %>%
+    ddb_data <- lapply(ddb_paths, get_id_timelapse, log = log_fn) %>%
       bind_rows() %>%
       filter(!grepl("unreadable_file", RelativePath))
     

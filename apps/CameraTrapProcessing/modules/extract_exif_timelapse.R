@@ -94,8 +94,8 @@ find_station_sampledate <- function(data_tl_raw, ddb_path){
 }
 
 
-process_ddb_datatable <- function(data_tl_raw, ddb_path){
-  
+process_ddb_datatable <- function(data_tl_raw, ddb_path, log = message){
+
   ddb_data_station <- find_station_sampledate(data_tl_raw, ddb_path)
   
   ddb_data <- ddb_data_station %>%
@@ -122,8 +122,8 @@ process_ddb_datatable <- function(data_tl_raw, ddb_path){
       pull(Station_SampleDate) %>%
       unique()
     
-    cat("Warning: There are videos in", paste(unsure_stations, collapse = ", "), 
-        "that are still marked as UNSURE. Please check.\n")
+    log(paste("WARNING: There are videos in", paste(unsure_stations, collapse = ", "),
+              "that are still marked as UNSURE. Please check."))
   }
   
   ## Check that there are no videos that have not been sorted
@@ -134,9 +134,9 @@ process_ddb_datatable <- function(data_tl_raw, ddb_path){
       pull(Station_SampleDate) %>%
       unique()
     
-    cat("Warning: There are videos in",paste(unsorted_stations,collapse = ", "),
-        "that have not been sorted (Species drop down box is left blank).",
-        "Please check.\n")
+    log(paste("WARNING: There are videos in", paste(unsorted_stations, collapse = ", "),
+              "that have not been sorted (Species drop down box is left blank).",
+              "Please check."))
   }
   
   ddb_data_final <- ddb_data %>%
@@ -146,10 +146,10 @@ process_ddb_datatable <- function(data_tl_raw, ddb_path){
 }
 
 
-get_id_timelapse <- function(ddb_path){
-  
+get_id_timelapse <- function(ddb_path, log = message){
+
   data_tl_raw <- read_ddb_datatable(ddb_path)
-  data_tl <- process_ddb_datatable(data_tl_raw, ddb_path)
-  
+  data_tl <- process_ddb_datatable(data_tl_raw, ddb_path, log = log)
+
   return(data_tl)
 }

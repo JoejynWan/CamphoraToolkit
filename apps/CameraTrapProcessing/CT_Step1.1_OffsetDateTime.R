@@ -1,36 +1,39 @@
-#### Installing and loading required packages ####
-rm(list=ls())
-source("modules/utils.R")
-install_load_packages(c("tidyverse"))
+#------------------------------------------------#
+#### Offset DateTime in an already-generated exif ####
+#------------------------------------------------#
+## Corrects FileModifyDate/Date/Time in a *_exif.csv when the camera's clock
+## was wrong at the time of recording, either by a fixed number of hours or by
+## anchoring the first video to its actual DateTime.
 
 
-#### Variable Control Panel ####
-exif_path = "Z:/01_Current_Projects_A-D/Clementi Stream EIA EMMP_Ramboll/02_Camera_Trapping/Camera_Trap_Data/02 Processed/2025 12/20251204_B/CT01B_20251204/CT01B_20251204_exif.csv"
+#### Main function ####
+offset_datetime <- function(exif_path, offset, log = message){
 
-## Offset may be the number of hours to be offset (i.e., offset = -12) OR
-## Offset may be the correct DateTime of the first video (i.e., offset = "2024-01-10 11:02:20")
-offset = "2025-11-13 08:00:00"
+  offset_numeric <- suppressWarnings(as.numeric(offset))
 
+  if (!is.na(offset_numeric)){
+    ## offset is a number of hours (e.g. -12, or "12" typed into a text box)
+    offset_sec <- offset_numeric * 60 * 60
+    log(paste("Applying a", offset_numeric, "hour offset..."))
 
-#### Offset hours to exif data ####
-if (class(offset) == "character"){
+  } else {
+    ## offset is the correct DateTime of the first video (e.g. "2025-11-13 08:00:00")
+    exif_raw <- read.csv(exif_path)
+    first_datetime <- min(exif_raw$FileModifyDate)
+    offset_sec <- difftime(offset, first_datetime, units = "secs")
+    log(paste("Anchoring first video to", offset, "..."))
+  }
 
-  exif_raw <- read.csv(exif_path)
-  first_datetime <- min(exif_raw$FileModifyDate)
-  offset_sec <- difftime(offset, first_datetime, units = "secs")
-  
-} else if (class(offset) == "numeric"){
-  
-  offset_sec <- offset*60*60
-  
-} else stop("Please input a valid offset amount in hours or the actual DateTime of the first vid.")
+  exif <- read.csv(exif_path) %>%
+    mutate(FileModifyDate = as.POSIXct(FileModifyDate),
+           FileModifyDate = FileModifyDate + offset_sec,
+           Date = as.Date(FileModifyDate, tz = "Singapore"),
+           Time = format(as.POSIXlt(FileModifyDate),
+                        format = "%H:%M:%S", tz = "Singapore"))
 
-exif <- read.csv(exif_path) %>%
-  mutate(FileModifyDate = as.POSIXct(FileModifyDate),
-         FileModifyDate = FileModifyDate+offset_sec,
-         Date = as.Date(FileModifyDate, tz="Singapore"),
-         Time = format(as.POSIXlt(FileModifyDate), 
-                       format = "%H:%M:%S", tz="Singapore"))
+  exif_output <- paste0(tools::file_path_sans_ext(exif_path), "_offset_exif.csv")
+  write.csv(exif, exif_output, row.names = FALSE)
 
-exif_output <- paste(tools::file_path_sans_ext(exif_path), "_offset_exif.csv", sep = "")
-write.csv(exif, exif_output, row.names = F)
+  log(paste("Done! Offset exif saved at:", exif_output))
+  invisible(exif_output)
+}

@@ -34,25 +34,25 @@ load_cs_impact_sheet <- function(fauna_database_path){
 }
 
 
-fill_missing_spp <- function(cs_impact, input_spp_df){
+fill_missing_spp <- function(cs_impact, input_spp_df, log = message){
 
   ## Find species missing in the fauna database
   target_spp <- input_spp_df$ScientificName
   missing_spp <- target_spp[!target_spp %in% cs_impact$ScientificName]
-  
+
   if (length(missing_spp) != 0){
     ## Add missing species with empty impact intensity values
-    cs_impact_missing <- data.frame(matrix(ncol = ncol(cs_impact), 
+    cs_impact_missing <- data.frame(matrix(ncol = ncol(cs_impact),
                                            nrow = length(missing_spp)))
     colnames(cs_impact_missing) <- colnames(cs_impact)
     cs_impact_missing$ScientificName <- missing_spp
-    
+
     cs_impact_full <- rbind(cs_impact, cs_impact_missing)
-    
-    cat("WARNING: There are species missing from the fauna database: ", 
-        paste(missing_spp, collapse = ", "), ". ", 
-        "These missing species will be present in the output with missing ",
-        "impact intensity information.\n", sep = "")
+
+    log(paste0("WARNING: There are species missing from the fauna database: ",
+               paste(missing_spp, collapse = ", "), ". ",
+               "These missing species will be present in the output with missing ",
+               "impact intensity information."))
   } else {
     
     cs_impact_full <- cs_impact

@@ -82,7 +82,7 @@ run_impact_assessment <- function(species_list_path,
   ## Find species present in the input that is missing from the fauna database 
   ## These missing species will be added to the fauna database with missing values
   ## Data frame will then be converted from wide to long format 
-  cs_impact_long <- fill_missing_spp(cs_impact, input_spp_df)
+  cs_impact_long <- fill_missing_spp(cs_impact, input_spp_df, log = log)
 
   # ── 2. Build species × impact table ───────────────────────────────────────
 
