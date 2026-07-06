@@ -1,4 +1,4 @@
-## modules/impact_assessment.R
+## impact_assessment.R
 ## Core logic for running the fauna impact assessment.
 ## Called by app.R — do not run this file directly.
 

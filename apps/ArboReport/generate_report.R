@@ -1,4 +1,4 @@
-## modules/generate_report.R
+## generate_report.R
 ## Core logic for generating Arboriculture (Arbo) Word reports from tree
 ## assessment biodata. Called by app.R — do not run this file directly.
 ##
@@ -11,7 +11,7 @@
 #' Generate one or more Arbo Word report(s) from tree assessment biodata.
 #'
 #' @param path_biodata        Path to the biodata CSV export.
-#' @param rmd_path            Path to arboreport_full.Rmd (bundled alongside this module).
+#' @param rmd_path            Path to arboreport_full.Rmd (bundled in the modules/ subfolder).
 #' @param output_dir          Directory to write the generated .docx file(s) into.
 #' @param resized_photos_dir  Directory containing resized photo folders, or NULL to omit photos.
 #' @param photo_prefix        Prefix used in photo folder names, e.g. "UWCSEA_Photos". Required if resized_photos_dir is set.

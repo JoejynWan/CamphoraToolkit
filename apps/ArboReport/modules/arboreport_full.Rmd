@@ -1,7 +1,7 @@
 ---
 output:
   word_document:
-    reference_docx: data/arboreport_template.docx
+    reference_docx: ../data/arboreport_template.docx
 params:
   biodata: NULL
   resized_photos_dir: NULL

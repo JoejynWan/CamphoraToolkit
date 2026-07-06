@@ -12,10 +12,10 @@ source("apps/CameraTrapProcessing/CT_Step3_IndpDets.R")
 source("apps/AbioticMonitoring/water_report.R")
 source("apps/AbioticMonitoring/noise_report.R")
 source("apps/ImpactAssessment/modules/utils.R")
-source("apps/ImpactAssessment/modules/impact_assessment.R")
+source("apps/ImpactAssessment/impact_assessment.R")
 source("apps/ArboReport/modules/utils.R")
-source("apps/ArboReport/modules/generate_report.R")
-source("apps/ArboReport/modules/resize_photos.R")
+source("apps/ArboReport/generate_report.R")
+source("apps/ArboReport/resize_photos.R")
 
 library(tools)
 
@@ -23,7 +23,7 @@ library(tools)
 #### Fixed Variables ####
 SPECIES_DB_PATH <- "apps/CameraTrapProcessing/data/Species_Database.xlsx"
 IA_MATRIX_PATH  <- "apps/ImpactAssessment/data/ConsequenceSignificanceMatrix.xlsx"
-ARBO_RMD_PATH   <- "apps/ArboReport/arboreport_full.Rmd"
+ARBO_RMD_PATH   <- "apps/ArboReport/modules/arboreport_full.Rmd"
 
 
 #### CT Step 1: EXIF Extraction ####
@@ -123,12 +123,11 @@ resize_arbo_photos(
 
 
 #### Arbo Report: Generate Report ####
-## Uncomment and fill in paths before running
-# path_arbo_biodata <- "Z:/path/to/Arbo_Data_Combined.csv"
+path_arbo_biodata <- "C:/Users/Joejyn/Downloads/Holland_Arbo_v0_1-20.csv"
 
 ## [Optional] Set to NULL to generate the report without photos
-# arbo_resized_photos_dir <- "Z:/path/to/resized/photos"
-arbo_photo_prefix <- "UWCSEA_Photos"
+arbo_resized_photos_dir <- NULL
+arbo_photo_prefix <- "Holland Rd_Photos"
 
 run_arbo_report(
   path_biodata        = path_arbo_biodata,

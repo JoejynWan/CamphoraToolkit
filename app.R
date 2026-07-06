@@ -15,13 +15,13 @@
 ##   apps/CameraTrapProcessing/data/Species_Database.xlsx         <- CT species lookup table
 ##   apps/AbioticMonitoring/water_report.R                        <- Abiotic water quality
 ##   apps/AbioticMonitoring/noise_report.R                        <- Abiotic noise monitoring
-##   apps/ImpactAssessment/modules/impact_assessment.R            <- Fauna IA core logic
+##   apps/ImpactAssessment/impact_assessment.R                    <- Fauna IA core logic
 ##   apps/ImpactAssessment/modules/utils.R                        <- Fauna IA shared utilities
 ##   apps/ImpactAssessment/data/ConsequenceSignificanceMatrix.xlsx <- Fauna IA matrix (bundled)
-##   apps/ArboReport/modules/generate_report.R                    <- Arbo Report core logic (renders Word docs)
-##   apps/ArboReport/modules/resize_photos.R                      <- Arbo Report photo resizing
+##   apps/ArboReport/generate_report.R                             <- Arbo Report core logic (renders Word docs)
+##   apps/ArboReport/resize_photos.R                               <- Arbo Report photo resizing
 ##   apps/ArboReport/modules/utils.R                               <- Arbo Report shared utilities
-##   apps/ArboReport/arboreport_full.Rmd, arboreport_onetree.Rmd  <- Arbo Report Word templates
+##   apps/ArboReport/modules/arboreport_full.Rmd, arboreport_onetree.Rmd  <- Arbo Report Word templates
 ##   apps/ArboReport/data/arboreport_template.docx                <- Arbo Report Word reference style (bundled)
 ##   apps/ArboReport/data/Arboriculture_phrases_to_automate.csv   <- Arbo Report phrase lookup (bundled)
 ##
@@ -57,14 +57,14 @@ source("apps/CameraTrapProcessing/CT_Step3_IndpDets.R")
 source("apps/AbioticMonitoring/water_report.R")
 source("apps/AbioticMonitoring/noise_report.R")
 source("apps/ImpactAssessment/modules/utils.R")
-source("apps/ImpactAssessment/modules/impact_assessment.R")
+source("apps/ImpactAssessment/impact_assessment.R")
 source("apps/ArboReport/modules/utils.R")
-source("apps/ArboReport/modules/generate_report.R")
-source("apps/ArboReport/modules/resize_photos.R")
+source("apps/ArboReport/generate_report.R")
+source("apps/ArboReport/resize_photos.R")
 
 SPECIES_DB_PATH <- "apps/CameraTrapProcessing/data/Species_Database.xlsx"
 IA_MATRIX_PATH  <- "apps/ImpactAssessment/data/ConsequenceSignificanceMatrix.xlsx"
-ARBO_RMD_PATH   <- "apps/ArboReport/arboreport_full.Rmd"
+ARBO_RMD_PATH   <- "apps/ArboReport/modules/arboreport_full.Rmd"
 VERSION         <- "v2.3"
 UPDATE_DATE     <- "2026-07-03"
 

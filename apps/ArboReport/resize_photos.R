@@ -1,4 +1,4 @@
-## modules/resize_photos.R
+## resize_photos.R
 ## Core logic for resizing Arbo site photos before generating Word reports.
 ## Called by app.R — do not run this file directly.
 ##

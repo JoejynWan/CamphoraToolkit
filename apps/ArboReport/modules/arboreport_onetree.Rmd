@@ -1,7 +1,7 @@
 ---
 output:
   word_document: 
-    reference_docx: "data/arboreport_template.docx"
+    reference_docx: "../data/arboreport_template.docx"
 params:
   biodata_row: NULL
   resized_photos_dir: NULL
@@ -174,7 +174,7 @@ if (is_empty(lean_raw) | is.na(lean_raw)) {
 }
 
 ## Lines from observation column
-arbo_phrases <- read.csv("data/Arboriculture_phrases_to_automate.csv")
+arbo_phrases <- read.csv("../data/Arboriculture_phrases_to_automate.csv")
 
 obs <- unlist(strsplit(biodata_row$Observation, ","))
 
