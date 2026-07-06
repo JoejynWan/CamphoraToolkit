@@ -123,14 +123,14 @@ resize_arbo_photos(
 
 
 #### Arbo Report: Generate Report ####
-path_arbo_biodata <- "C:/Users/Joejyn/Downloads/Holland_Arbo_v0_1-20.csv"
+path_biodata <- "C:/Users/Joejyn/Downloads/Holland_Arbo_v0_1-20.csv"
 
 ## [Optional] Set to NULL to generate the report without photos
 arbo_resized_photos_dir <- NULL
 arbo_photo_prefix <- "Holland Rd_Photos"
 
 run_arbo_report(
-  path_biodata        = path_arbo_biodata,
+  path_biodata        = path_biodata,
   rmd_path             = ARBO_RMD_PATH,
   output_dir           = "apps/ArboReport/results",
   resized_photos_dir   = arbo_resized_photos_dir,

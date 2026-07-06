@@ -61,9 +61,11 @@ run_arbo_report <- function(path_biodata,
   }
 
   if (!all(col_names %in% names(biodata_full))) {
-    missing_cols <- str_replace_all(col_names[!col_names %in% names(biodata_full)], "\\.", " ")
+    missing_cols <- col_names[!col_names %in% names(biodata_full)]
+    extra_cols <- names(biodata_full)[!names(biodata_full) %in% col_names]
     stop("There are missing columns, please add them in or check for spelling and formatting: ",
-         paste(missing_cols, collapse = ", "))
+         paste(missing_cols, collapse = ", "), 
+         "\nYour extra columns are: ", paste(extra_cols, collapse = ", "))
   }
 
   ## Combine tree IDs for additional locations (A, B etc.) into one cell
