@@ -16,20 +16,31 @@ source("apps/ImpactAssessment/impact_assessment.R")
 source("apps/ArboReport/modules/utils.R")
 source("apps/ArboReport/generate_report.R")
 source("apps/ArboReport/resize_photos.R")
+source("apps/StreamInspection/stream_report.R")
+source("apps/BatRecordingProcessing/modules/util.r")
+source("apps/BatRecordingProcessing/modules/dup_rows.r")
+source("apps/BatRecordingProcessing/modules/match_gps.r")
+source("apps/BatRecordingProcessing/modules/sort_bat_data.r")
+source("apps/BatRecordingProcessing/Step1_process_meta.R")
+source("apps/BatRecordingProcessing/Step2_combine_meta.R")
+source("apps/BatRecordingProcessing/subsample.R")
+source("apps/BatRecordingProcessing/recover_meta.R")
 
 library(tools)
+library(lubridate)
 
 
 #### Fixed Variables ####
-SPECIES_DB_PATH <- "apps/CameraTrapProcessing/data/Species_Database.xlsx"
-IA_MATRIX_PATH  <- "apps/ImpactAssessment/data/ConsequenceSignificanceMatrix.xlsx"
-ARBO_RMD_PATH   <- "apps/ArboReport/modules/arboreport_full.Rmd"
+SPECIES_DB_PATH     <- "apps/CameraTrapProcessing/data/Species_Database.xlsx"
+IA_MATRIX_PATH      <- "apps/ImpactAssessment/data/ConsequenceSignificanceMatrix.xlsx"
+ARBO_RMD_PATH       <- "apps/ArboReport/modules/arboreport_full.Rmd"
+BAT_SPECIES_DB_PATH <- "apps/BatRecordingProcessing/data/Species_Database_Bats.csv"
 
 
 #### CT Step 1: EXIF Extraction ####
 ## Uncomment and fill in paths before running
-# path_processed <- "Z:/path/to/processed/station_folder"
-# path_raw       <- "Z:/path/to/raw/station_folder"
+path_processed <- "Z:/path/to/processed/station_folder"
+path_raw       <- "Z:/path/to/raw/station_folder"
 
 extract_exif(
   path_processed        = path_processed,
@@ -140,4 +151,71 @@ run_arbo_report(
   incl_crown_spread    = FALSE,
   sort_site            = FALSE,
   date_format          = "%d/%m/%Y"
+)
+
+
+#### Stream Inspection Report ####
+## Uncomment and fill in paths before running
+# si_path_fauna  <- "Z:/path/to/CR202 Fauna Monitoring Data.xlsx"
+# si_photos_dir  <- "Z:/path/to/Stream Inspection/Windsor"
+
+## Inspection date(s), YYYY-MM-DD. Single: "2025-11-25"; multiple: c("2025-11-25", "2025-11-26")
+si_dates <- c("2025-11-25", "2025-11-26")
+
+stream_report(
+  path_fauna_data = si_path_fauna,
+  path_photos_dir = si_photos_dir,
+  inspection_date = si_dates,
+  output_dir      = "apps/StreamInspection/results"
+)
+
+
+#### Bat Recording: Step 1 Process Meta ####
+## Uncomment and fill in paths before running
+# bat_meta_file <- "Z:/path/to/meta.csv"
+# bat_gps_file  <- "Z:/path/to/tracks.csv"   # set to NA to skip GPS matching
+# bat_wav_dir   <- "Z:/path/to/wav_folder"   # set to NA to skip sorting
+
+process_bat_meta(
+  meta_file         = bat_meta_file,
+  species_db_path   = BAT_SPECIES_DB_PATH,
+  delimiter         = "_",
+  wav_folder        = NA,          # or bat_wav_dir to sort .wav files
+  handheld_gps_file = NA,          # or bat_gps_file to match GPS
+  output_dir        = dirname(bat_meta_file)
+)
+
+
+#### Bat Recording: Step 2 Combine Meta ####
+## Uncomment and fill in path before running
+# bat_meta_folder <- "Z:/path/to/folder/of/cleaned_or_matched_csvs"
+
+combine_bat_meta(
+  meta_folder = bat_meta_folder,
+  output_dir  = bat_meta_folder
+)
+
+
+#### Bat Recording: Sub-sample Files ####
+## Uncomment and fill in path before running
+# bat_raw_dir <- "Z:/path/to/raw/wav_folder"
+
+## Keep 5 minutes out of every 30-minute block
+bat_subsample_mins <- c(0, 1, 2, 3, 4, 30, 31, 32, 33, 34)
+
+subsample_bat_files(
+  path_raw       = bat_raw_dir,
+  subsample_mins = bat_subsample_mins
+)
+
+
+#### Bat Recording: Recover Meta ####
+## Uncomment and fill in paths before running
+# bat_proc_dir <- "C:/TempDataForSpeed/20240930/Processed/Bat4_20240930/"
+# bat_raw_dir2 <- "C:/TempDataForSpeed/20240930/Raw/Bat4_20240930/"
+
+recover_bat_meta(
+  path_processed = bat_proc_dir,
+  path_raw       = bat_raw_dir2,
+  output_dir     = bat_proc_dir
 )

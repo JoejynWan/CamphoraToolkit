@@ -1,29 +1,8 @@
 ## app.R
 ## Camphora Toolkit Hub — unified Shiny front-end.
 ## Integrates Camera Trap Processing, Abiotic Monitoring, Fauna Impact
-## Assessment, and Arbo Report alongside the project directory hub.
-##
-## File layout expected:
-##   app.R
-##   apps/CameraTrapProcessing/CT_Step1_ExtractExif.R             <- CT Step 1 logic (sources modules/ internally)
-##   apps/CameraTrapProcessing/CT_Step1.1_OffsetDateTime.R        <- CT Step 1.1 logic (fixes wrong camera clock in an exif.csv)
-##   apps/CameraTrapProcessing/CT_Step2_MergeExifs.R              <- CT Step 2 logic
-##   apps/CameraTrapProcessing/CT_Step3_IndpDets.R                <- CT Step 3 logic
-##   apps/CameraTrapProcessing/modules/utils.R                    <- CT shared utilities
-##   apps/CameraTrapProcessing/modules/extract_exif_manual.R      <- CT manual-sorted extraction
-##   apps/CameraTrapProcessing/modules/extract_exif_timelapse.R   <- CT timelapse extraction
-##   apps/CameraTrapProcessing/data/Species_Database.xlsx         <- CT species lookup table
-##   apps/AbioticMonitoring/water_report.R                        <- Abiotic water quality
-##   apps/AbioticMonitoring/noise_report.R                        <- Abiotic noise monitoring
-##   apps/ImpactAssessment/impact_assessment.R                    <- Fauna IA core logic
-##   apps/ImpactAssessment/modules/utils.R                        <- Fauna IA shared utilities
-##   apps/ImpactAssessment/data/ConsequenceSignificanceMatrix.xlsx <- Fauna IA matrix (bundled)
-##   apps/ArboReport/generate_report.R                             <- Arbo Report core logic (renders Word docs)
-##   apps/ArboReport/resize_photos.R                               <- Arbo Report photo resizing
-##   apps/ArboReport/modules/utils.R                               <- Arbo Report shared utilities
-##   apps/ArboReport/modules/arboreport_full.Rmd, arboreport_onetree.Rmd  <- Arbo Report Word templates
-##   apps/ArboReport/data/arboreport_template.docx                <- Arbo Report Word reference style (bundled)
-##   apps/ArboReport/data/Arboriculture_phrases_to_automate.csv   <- Arbo Report phrase lookup (bundled)
+## Assessment, Arbo Report, Stream Inspection, and Bat Recording Processing
+## alongside the project directory hub.
 ##
 ## Runs locally via launcher: shiny::runGitHub("CamphoraToolkit", "JoejynWan")
 ## Or directly:               shiny::runApp(".")
@@ -45,6 +24,7 @@ library(bsicons)
 library(parallel)
 library(openxlsx)
 library(camtrapR)
+library(lubridate)
 library(rmarkdown)
 library(tidyverse)
 library(shinyFiles)
@@ -61,12 +41,22 @@ source("apps/ImpactAssessment/impact_assessment.R")
 source("apps/ArboReport/modules/utils.R")
 source("apps/ArboReport/generate_report.R")
 source("apps/ArboReport/resize_photos.R")
+source("apps/StreamInspection/stream_report.R")
+source("apps/BatRecordingProcessing/modules/util.r")
+source("apps/BatRecordingProcessing/modules/dup_rows.r")
+source("apps/BatRecordingProcessing/modules/match_gps.r")
+source("apps/BatRecordingProcessing/modules/sort_bat_data.r")
+source("apps/BatRecordingProcessing/Step1_process_meta.R")
+source("apps/BatRecordingProcessing/Step2_combine_meta.R")
+source("apps/BatRecordingProcessing/subsample.R")
+source("apps/BatRecordingProcessing/recover_meta.R")
 
-SPECIES_DB_PATH <- "apps/CameraTrapProcessing/data/Species_Database.xlsx"
-IA_MATRIX_PATH  <- "apps/ImpactAssessment/data/ConsequenceSignificanceMatrix.xlsx"
-ARBO_RMD_PATH   <- "apps/ArboReport/modules/arboreport_full.Rmd"
-VERSION         <- "v2.3"
-UPDATE_DATE     <- "2026-07-03"
+SPECIES_DB_PATH     <- "apps/CameraTrapProcessing/data/Species_Database.xlsx"
+IA_MATRIX_PATH      <- "apps/ImpactAssessment/data/ConsequenceSignificanceMatrix.xlsx"
+ARBO_RMD_PATH       <- "apps/ArboReport/modules/arboreport_full.Rmd"
+BAT_SPECIES_DB_PATH <- "apps/BatRecordingProcessing/data/Species_Database_Bats.csv"
+VERSION         <- "v2.5"
+UPDATE_DATE     <- "2026-07-07"
 
 
 # ── Project Registry ────────────────────────────────────────────────────────
@@ -132,12 +122,25 @@ PROJECTS <- list(
     description = "Processes fauna data and stream photos into a standardised
                    stream inspection report.",
     url         = NULL,
-    nav_target  = NULL,
+    nav_target  = "stream_report",
     icon        = "water",
     category    = "Fauna",
-    status      = "coming soon",
-    version     = NA,
-    updated     = NA
+    status      = "beta",
+    version     = "v1.2",
+    updated     = "2026-07-07"
+  ),
+
+  list(
+    title       = "Bat Recording Processing",
+    description = "Cleans Kaleidoscope bat meta.csv exports, matches handheld GPS,
+                   sorts .wav files, sub-samples and combines datasheets.",
+    url         = NULL,
+    nav_target  = "bat_step1",
+    icon        = "soundwave",
+    category    = "Fauna",
+    status      = "beta",
+    version     = "v1.5",
+    updated     = "2026-07-07"
   )
 
   ## ── Paste new entries below this line ──────────────────────────────────────
@@ -872,6 +875,262 @@ ui <- page_navbar(
   ),
 
 
+  # ── Stream Inspection Report ──────────────────────────────────────────────
+  nav_panel(
+    title = icon_text("Stream Inspection", "water"),
+    value = "stream_report",
+
+    layout_sidebar(
+      fillable = TRUE,
+      sidebar = sidebar(
+        width = 340,
+
+        h5("Input file", class = "fw-bold mt-1"),
+        fileInput("si_fauna_file",
+                  label = tooltip(
+                    span("Fauna datasheet (.xlsx)", bsicons::bs_icon("info-circle")),
+                    "Must contain sheets '01 Log' and '02 DataList', with the sampling point names in the Transect column."
+                  ),
+                  accept = ".xlsx", multiple = FALSE),
+
+        hr(),
+        h5("Photos", class = "fw-bold mt-1"),
+        p(class = "mb-1",
+          tooltip(span("Root photo folder", bsicons::bs_icon("info-circle")),
+                  "Folder structured as: root / YYYYMMDD / SamplingPoint_YYYYMMDD / photo.jpg. Sampling point names must match the Transect column.")),
+        shinyDirButton("si_photos_dir", label = "Browse...",
+                       title = "Choose root photo directory",
+                       class = "btn-outline-secondary w-100 mb-1"),
+        verbatimTextOutput("si_photos_dir_display", placeholder = TRUE),
+
+        hr(),
+        h5("Survey parameters", class = "fw-bold mt-1"),
+        textAreaInput("si_dates",
+                      label = tooltip(
+                        span("Inspection date(s)", bsicons::bs_icon("info-circle")),
+                        "One date per line or comma-separated. Format: YYYY-MM-DD."
+                      ),
+                      placeholder = "e.g.\n2025-11-25\n2025-11-26", rows = 3),
+
+        hr(),
+        actionButton("si_run_btn",
+                     label = tagList(bsicons::bs_icon("play-fill"), " Generate Report"),
+                     class = "btn-primary w-100"),
+        hr(),
+        uiOutput("si_download_ui")
+      ),
+
+      layout_column_wrap(
+        width = 1,
+        card(card_header(tagList(bsicons::bs_icon("terminal"), " Log")),
+             verbatimTextOutput("si_log_output"), height = 200),
+        card(card_header(tagList(bsicons::bs_icon("table"), " Report preview")),
+             div(style = "overflow-x: auto;", tableOutput("si_preview_table")))
+      )
+    )
+  ),
+
+
+  # ── Bat Recording Processing ──────────────────────────────────────────────
+  nav_menu(
+    title = icon_text("Bat Recordings", "soundwave"),
+
+    # Step 1: Process Meta
+    nav_panel(
+      title = icon_text("Step 1: Process Meta", "file-earmark-check"),
+      value = "bat_step1",
+
+      layout_sidebar(
+        fillable = TRUE,
+        sidebar = sidebar(
+          width = 340,
+
+          h5("Input file", class = "fw-bold mt-1"),
+          fileInput("bat1_meta_file",
+                    label = tooltip(
+                      span("Kaleidoscope meta.csv", bsicons::bs_icon("info-circle")),
+                      "The meta.csv exported from Kaleidoscope, with a MANUAL.ID column."
+                    ),
+                    accept = ".csv", multiple = FALSE),
+
+          textInput("bat1_delimiter",
+                    label = tooltip(
+                      span("Species delimiter", bsicons::bs_icon("info-circle")),
+                      "Character separating multiple species within one MANUAL.ID cell."
+                    ),
+                    value = "_"),
+
+          hr(),
+          checkboxInput("bat1_match_gps", "Match handheld GPS tracks", value = FALSE),
+          conditionalPanel(
+            condition = "input.bat1_match_gps == true",
+            fileInput("bat1_gps_file",
+                      label = tooltip(
+                        span("Handheld GPS tracks (.csv)", bsicons::bs_icon("info-circle")),
+                        "Tracks CSV with time, lat, lon columns. Each bat call is matched to the closest track time."
+                      ),
+                      accept = ".csv", multiple = FALSE)
+          ),
+
+          checkboxInput("bat1_sort_wav", "Sort .wav files into species folders", value = FALSE),
+          conditionalPanel(
+            condition = "input.bat1_sort_wav == true",
+            p(class = "mb-1",
+              tooltip(span("Folder of .wav files", bsicons::bs_icon("info-circle")),
+                      "Folder containing the .wav files named in the meta.csv IN.FILE column.")),
+            shinyDirButton("bat1_wav_dir", label = "Browse...",
+                           title = "Choose folder of .wav files",
+                           class = "btn-outline-secondary w-100 mb-1"),
+            verbatimTextOutput("bat1_wav_dir_display", placeholder = TRUE)
+          ),
+
+          hr(),
+          actionButton("bat1_run_btn",
+                       label = tagList(bsicons::bs_icon("play-fill"), " Process Meta"),
+                       class = "btn-primary w-100"),
+          hr(),
+          uiOutput("bat1_download_ui")
+        ),
+
+        layout_column_wrap(
+          width = 1,
+          card(card_header(tagList(bsicons::bs_icon("terminal"), " Log")),
+               verbatimTextOutput("bat1_log_output"), height = 220),
+          card(card_header(tagList(bsicons::bs_icon("table"), " Output preview (first 50 rows)")),
+               div(style = "overflow-x: auto;", tableOutput("bat1_preview_table")))
+        )
+      )
+    ),
+
+    # Step 2: Combine Meta
+    nav_panel(
+      title = icon_text("Step 2: Combine Meta", "collection"),
+      value = "bat_step2",
+
+      layout_sidebar(
+        fillable = TRUE,
+        sidebar = sidebar(
+          width = 340,
+
+          h5("Input folder", class = "fw-bold mt-1"),
+          p(class = "mb-1",
+            tooltip(span("Folder of cleaned/matched CSVs", bsicons::bs_icon("info-circle")),
+                    "Folder containing the meta_cleaned.csv / meta_matched.csv outputs from Step 1 (searched recursively).")),
+          shinyDirButton("bat2_meta_dir", label = "Browse...",
+                         title = "Choose folder of cleaned/matched CSVs",
+                         class = "btn-outline-secondary w-100 mb-1"),
+          verbatimTextOutput("bat2_meta_dir_display", placeholder = TRUE),
+
+          hr(),
+          actionButton("bat2_run_btn",
+                       label = tagList(bsicons::bs_icon("play-fill"), " Combine"),
+                       class = "btn-primary w-100"),
+          hr(),
+          uiOutput("bat2_download_ui")
+        ),
+
+        layout_column_wrap(
+          width = 1,
+          card(card_header(tagList(bsicons::bs_icon("terminal"), " Log")),
+               verbatimTextOutput("bat2_log_output"), height = 200),
+          card(card_header(tagList(bsicons::bs_icon("table"), " Combined preview (first 50 rows)")),
+               div(style = "overflow-x: auto;", tableOutput("bat2_preview_table")))
+        )
+      )
+    ),
+
+    # Sub-sample Files
+    nav_panel(
+      title = icon_text("Sub-sample Files", "funnel"),
+      value = "bat_subsample",
+
+      layout_sidebar(
+        fillable = TRUE,
+        sidebar = sidebar(
+          width = 340,
+
+          h5("Input folder", class = "fw-bold mt-1"),
+          p(class = "mb-1",
+            tooltip(span("Folder of raw .wav files", bsicons::bs_icon("info-circle")),
+                    "Raw .wav files named Project_Date_Time (e.g. E_HT_20250522_003012.wav). A '<folder>_subsampled' copy is created next to it.")),
+          shinyDirButton("bat_sub_raw_dir", label = "Browse...",
+                         title = "Choose folder of raw .wav files",
+                         class = "btn-outline-secondary w-100 mb-1"),
+          verbatimTextOutput("bat_sub_raw_dir_display", placeholder = TRUE),
+
+          hr(),
+          textInput("bat_sub_mins",
+                    label = tooltip(
+                      span("Minutes to keep", bsicons::bs_icon("info-circle")),
+                      "Comma-separated minutes of the hour to keep. Default keeps 5 minutes out of every 30-minute block."
+                    ),
+                    value = "0,1,2,3,4,30,31,32,33,34"),
+
+          hr(),
+          actionButton("bat_sub_run_btn",
+                       label = tagList(bsicons::bs_icon("play-fill"), " Sub-sample"),
+                       class = "btn-primary w-100")
+        ),
+
+        layout_column_wrap(
+          width = 1,
+          card(card_header(tagList(bsicons::bs_icon("terminal"), " Log")),
+               verbatimTextOutput("bat_sub_log_output"), height = 300)
+        )
+      )
+    ),
+
+    # Recover Meta
+    nav_panel(
+      title = icon_text("Recover Meta", "arrow-counterclockwise"),
+      value = "bat_recover",
+
+      layout_sidebar(
+        fillable = TRUE,
+        sidebar = sidebar(
+          width = 340,
+
+          div(class = "alert alert-warning small",
+              bsicons::bs_icon("exclamation-triangle"), " ",
+              "Last resort only — use when the meta.csv is lost but files are already sorted. The output may not be readable by Kaleidoscope."),
+
+          h5("Input folders", class = "fw-bold mt-1"),
+          p(class = "mb-1",
+            tooltip(span("Sorted (processed) folder", bsicons::bs_icon("info-circle")),
+                    "Folder of already-sorted .wav files, one subfolder per species.")),
+          shinyDirButton("bat_rec_proc_dir", label = "Browse...",
+                         title = "Choose sorted (processed) folder",
+                         class = "btn-outline-secondary w-100 mb-1"),
+          verbatimTextOutput("bat_rec_proc_dir_display", placeholder = TRUE),
+
+          p(class = "mb-1 mt-2",
+            tooltip(span("Raw folder", bsicons::bs_icon("info-circle")),
+                    "Folder of the original raw .wav files (read for EXIF timestamps).")),
+          shinyDirButton("bat_rec_raw_dir", label = "Browse...",
+                         title = "Choose raw folder",
+                         class = "btn-outline-secondary w-100 mb-1"),
+          verbatimTextOutput("bat_rec_raw_dir_display", placeholder = TRUE),
+
+          hr(),
+          actionButton("bat_rec_run_btn",
+                       label = tagList(bsicons::bs_icon("play-fill"), " Recover Meta"),
+                       class = "btn-primary w-100"),
+          hr(),
+          uiOutput("bat_rec_download_ui")
+        ),
+
+        layout_column_wrap(
+          width = 1,
+          card(card_header(tagList(bsicons::bs_icon("terminal"), " Log")),
+               verbatimTextOutput("bat_rec_log_output"), height = 220),
+          card(card_header(tagList(bsicons::bs_icon("table"), " meta_reverse preview (first 50 rows)")),
+               div(style = "overflow-x: auto;", tableOutput("bat_rec_preview_table")))
+        )
+      )
+    )
+  ),
+
+
   # ── About Tab ─────────────────────────────────────────────────────────────
   # One accordion_panel per app, grouping that app's cards — adding a new app
   # means adding one more accordion_panel(), not editing a flat card grid.
@@ -1075,6 +1334,100 @@ ui <- page_navbar(
             )
           )
         )
+      ),
+
+      accordion_panel(
+        value = "about_stream",
+        title = about_panel_title("Stream Inspection Report", "stream_report", "water"),
+
+        card(
+          card_header("Stream Inspection Report"),
+          card_body(
+            p("Collates aquatic fauna survey data and field photos into a formatted Excel stream inspection report."),
+            tags$ol(
+              tags$li("Upload the ", strong("fauna datasheet"), " (.xlsx) — must contain sheets ", code("01 Log"), " and ", code("02 DataList"), "."),
+              tags$li("Select the ", strong("root photo folder"), ", structured as ", code("root / YYYYMMDD / SamplingPoint_YYYYMMDD / photo.jpg"), " — sampling point names must match the Transect column."),
+              tags$li("Enter the ", strong("inspection date(s)"), " in YYYY-MM-DD format, one per line."),
+              tags$li("Click ", strong("Generate Report"), "."),
+              tags$li("Download the output workbook.")
+            ),
+            hr(),
+            p(strong("Output:")),
+            tags$ul(tags$li("Excel workbook — header block (inspection round, dates, surveyors, weather) plus a transposed table per sampling point with date, time, fauna observed, and embedded field photos."))
+          )
+        )
+      ),
+
+      accordion_panel(
+        value = "about_bat",
+        title = about_panel_title("Bat Recording Processing", "bat_step1", "soundwave"),
+
+        layout_column_wrap(
+          width = 1 / 2,
+
+          card(
+            card_header("Step 1: Process Meta"),
+            card_body(
+              p("Cleans a Kaleidoscope ", code("meta.csv"), " — one species per row with corrected scientific names — and optionally matches handheld GPS tracks and sorts the .wav files into species folders."),
+              tags$ol(
+                tags$li("Upload the ", strong("meta.csv"), " and set the ", strong("species delimiter"), " (default ", code("_"), ")."),
+                tags$li("Optionally tick ", strong("Match handheld GPS"), " and upload the tracks CSV."),
+                tags$li("Optionally tick ", strong("Sort .wav files"), " and select the folder of .wav files."),
+                tags$li("Click ", strong("Process Meta"), " and download the result.")
+              ),
+              hr(),
+              p(strong("Output:")),
+              tags$ul(
+                tags$li(code("meta_cleaned.csv"), " (no GPS) or ", code("meta_matched.csv"), " (GPS matched)"),
+                tags$li("If sorting: .wav files copied into per-species subfolders, zipped for download.")
+              )
+            )
+          ),
+
+          card(
+            card_header("Step 2: Combine Meta"),
+            card_body(
+              p("Combines multiple cleaned/matched CSVs from Step 1 into a single dataset."),
+              tags$ol(
+                tags$li("Select the folder containing the Step 1 CSVs."),
+                tags$li("Click ", strong("Combine"), " and download ", code("meta_combined.csv"), ".")
+              ),
+              hr(),
+              p(strong("Output:")),
+              tags$ul(tags$li(code("meta_combined.csv"), " — all rows from every CSV in the folder."))
+            )
+          ),
+
+          card(
+            card_header("Sub-sample Files"),
+            card_body(
+              p("Copies a subset of raw .wav files by their recording minute, before manual ID-ing (e.g. keep 5 minutes out of every 30)."),
+              tags$ol(
+                tags$li("Select the folder of raw .wav files (named ", code("Project_Date_Time"), ")."),
+                tags$li("Set the ", strong("minutes to keep"), "."),
+                tags$li("Click ", strong("Sub-sample"), ".")
+              ),
+              hr(),
+              p(strong("Output:")),
+              tags$ul(tags$li("A ", code("<folder>_subsampled"), " folder created next to the input folder, containing the matched files."))
+            )
+          ),
+
+          card(
+            card_header("Recover Meta"),
+            card_body(
+              p("Last resort: reverse-engineers a ", code("meta.csv"), " from already-sorted species folders plus the raw .wav EXIF timestamps."),
+              tags$ol(
+                tags$li("Select the ", strong("sorted (processed)"), " folder (one subfolder per species)."),
+                tags$li("Select the ", strong("raw"), " folder."),
+                tags$li("Click ", strong("Recover Meta"), " and download the result.")
+              ),
+              hr(),
+              p(strong("Output:")),
+              tags$ul(tags$li(code("meta_reverse.csv"), " — may not be readable by Kaleidoscope."))
+            )
+          )
+        )
       )
     ),
 
@@ -1106,6 +1459,12 @@ server <- function(input, output, session) {
   shinyDirChoose(input, "arbo_photos_dir",       roots = volumes, session = session)
   shinyDirChoose(input, "arbophoto_source_dir",  roots = volumes, session = session)
   shinyDirChoose(input, "arbophoto_dest_dir",    roots = volumes, session = session)
+  shinyDirChoose(input, "si_photos_dir",         roots = volumes, session = session)
+  shinyDirChoose(input, "bat1_wav_dir",          roots = volumes, session = session)
+  shinyDirChoose(input, "bat2_meta_dir",         roots = volumes, session = session)
+  shinyDirChoose(input, "bat_sub_raw_dir",       roots = volumes, session = session)
+  shinyDirChoose(input, "bat_rec_proc_dir",      roots = volumes, session = session)
+  shinyDirChoose(input, "bat_rec_raw_dir",       roots = volumes, session = session)
 
 
   # ── Hub: filter bar + card grid + in-app navigation ──────────────────────
@@ -1798,6 +2157,385 @@ server <- function(input, output, session) {
     if (length(arbophoto_rv$log_lines) == 0) "No output yet. Select folders and click Resize Photos."
     else paste(arbophoto_rv$log_lines, collapse = "\n")
   })
+
+
+  # ── Stream Inspection Report ─────────────────────────────────────────────
+  si_photos_dir_sel <- reactive({
+    req(input$si_photos_dir)
+    parseDirPath(volumes, input$si_photos_dir)
+  })
+
+  output$si_photos_dir_display <- renderText({
+    d <- tryCatch(si_photos_dir_sel(), error = function(e) "")
+    if (length(d) == 0 || d == "") "No folder selected." else d
+  })
+
+  si_rv <- reactiveValues(
+    log_lines    = character(0),
+    output_path  = NULL,
+    preview_data = NULL
+  )
+  si_log <- make_logger(si_rv)
+
+  observeEvent(input$si_run_btn, {
+    si_rv$log_lines    <- character(0)
+    si_rv$output_path  <- NULL
+    si_rv$preview_data <- NULL
+
+    if (is.null(input$si_fauna_file)) { si_log("ERROR: No fauna datasheet uploaded."); return() }
+
+    photos_dir <- tryCatch(si_photos_dir_sel(), error = function(e) "")
+    if (length(photos_dir) == 0 || photos_dir == "") { si_log("ERROR: Please select the root photo folder."); return() }
+
+    dates_raw <- trimws(unlist(strsplit(input$si_dates, "[,\n]")))
+    dates     <- dates_raw[nchar(dates_raw) > 0]
+    dates     <- dates[!is.na(suppressWarnings(as.Date(dates, format = "%Y-%m-%d")))]
+    if (length(dates) == 0) { si_log("ERROR: No valid inspection dates entered. Use YYYY-MM-DD format."); return() }
+
+    withProgress(message = "Generating stream report...", value = 0, {
+      tryCatch({
+        incProgress(0.1)
+        out_path <- stream_report(
+          path_fauna_data = input$si_fauna_file$datapath,
+          path_photos_dir = photos_dir,
+          inspection_date = dates,
+          output_dir      = file.path(tempdir(), "stream_report"),
+          log             = si_log
+        )
+        si_rv$output_path <- out_path
+        incProgress(0.8)
+
+        # Preview: read back the transposed table rows (header + first photo row)
+        si_rv$preview_data <- tryCatch({
+          raw <- read.xlsx(out_path, sheet = 1, colNames = FALSE, skipEmptyRows = FALSE)
+          raw[9:min(13, nrow(raw)), ]
+        }, error = function(e) NULL)
+        incProgress(0.1)
+
+      }, error = function(e) si_log(paste("ERROR:", conditionMessage(e))))
+    })
+  })
+
+  output$si_log_output <- renderText({
+    if (length(si_rv$log_lines) == 0) "No output yet. Upload a datasheet, select photos, and click Generate Report."
+    else paste(si_rv$log_lines, collapse = "\n")
+  })
+
+  output$si_preview_table <- renderTable({
+    req(si_rv$preview_data)
+    si_rv$preview_data
+  }, striped = TRUE, hover = TRUE, bordered = TRUE, na = "", colnames = FALSE)
+
+  output$si_download_ui <- renderUI({
+    req(si_rv$output_path)
+    downloadButton("si_download_btn",
+                   label = tagList(bsicons::bs_icon("download"), " Download report (.xlsx)"),
+                   class = "btn-success w-100")
+  })
+
+  output$si_download_btn <- downloadHandler(
+    filename = function() paste0("StreamInspection_", format(Sys.Date(), "%Y%m%d"), ".xlsx"),
+    content  = function(file) { req(si_rv$output_path); file.copy(si_rv$output_path, file) }
+  )
+
+
+  # ── Bat: Step 1 Process Meta ─────────────────────────────────────────────
+  bat1_wav_dir_sel <- reactive({
+    req(input$bat1_wav_dir)
+    parseDirPath(volumes, input$bat1_wav_dir)
+  })
+
+  output$bat1_wav_dir_display <- renderText({
+    d <- tryCatch(bat1_wav_dir_sel(), error = function(e) "")
+    if (length(d) == 0 || d == "") "No folder selected." else d
+  })
+
+  bat1_rv <- reactiveValues(
+    log_lines    = character(0),
+    meta_path    = NULL,
+    zip_path     = NULL,
+    preview_data = NULL
+  )
+  bat1_log <- make_logger(bat1_rv)
+
+  observeEvent(input$bat1_run_btn, {
+    bat1_rv$log_lines    <- character(0)
+    bat1_rv$meta_path    <- NULL
+    bat1_rv$zip_path     <- NULL
+    bat1_rv$preview_data <- NULL
+
+    if (is.null(input$bat1_meta_file)) { bat1_log("ERROR: No meta.csv uploaded."); return() }
+    if (!file.exists(BAT_SPECIES_DB_PATH)) { bat1_log(paste("ERROR: Bat species database not found at:", BAT_SPECIES_DB_PATH)); return() }
+
+    delimiter <- input$bat1_delimiter
+    if (is.null(delimiter) || delimiter == "") delimiter <- "_"
+
+    gps_file <- NA
+    if (isTRUE(input$bat1_match_gps)) {
+      if (is.null(input$bat1_gps_file)) { bat1_log("ERROR: 'Match handheld GPS' is ticked but no GPS tracks CSV was uploaded."); return() }
+      gps_file <- input$bat1_gps_file$datapath
+    }
+
+    wav_folder <- NA
+    if (isTRUE(input$bat1_sort_wav)) {
+      wav_folder <- tryCatch(bat1_wav_dir_sel(), error = function(e) "")
+      if (length(wav_folder) == 0 || wav_folder == "") { bat1_log("ERROR: 'Sort .wav files' is ticked but no folder was selected."); return() }
+    }
+
+    ## Fresh unique output dir (sort_wav_files requires an empty 'out' folder)
+    out_dir <- file.path(tempdir(), paste0("bat_step1_", as.integer(Sys.time())))
+
+    withProgress(message = "Processing bat meta...", value = 0, {
+      tryCatch({
+        incProgress(0.1)
+        meta_path <- process_bat_meta(
+          meta_file         = input$bat1_meta_file$datapath,
+          species_db_path   = BAT_SPECIES_DB_PATH,
+          delimiter         = delimiter,
+          wav_folder        = wav_folder,
+          handheld_gps_file = gps_file,
+          output_dir        = out_dir,
+          log               = bat1_log
+        )
+        bat1_rv$meta_path    <- meta_path
+        bat1_rv$preview_data <- tryCatch(read.csv(meta_path), error = function(e) NULL)
+        incProgress(0.7)
+
+        ## Zip the sorted .wav folders for download, if any
+        sorted_out <- file.path(out_dir, "out")
+        if (dir.exists(sorted_out)) {
+          zip_path <- file.path(tempdir(), "bat_sorted_wav.zip")
+          if (file.exists(zip_path)) unlink(zip_path)
+          zip::zip(zip_path, files = list.files(sorted_out, recursive = TRUE, full.names = TRUE),
+                   mode = "cherry-pick")
+          bat1_rv$zip_path <- zip_path
+          bat1_log("Sorted .wav files zipped for download.")
+        }
+        incProgress(0.2)
+
+      }, error = function(e) bat1_log(paste("ERROR:", conditionMessage(e))))
+    })
+  })
+
+  output$bat1_log_output <- renderText({
+    if (length(bat1_rv$log_lines) == 0) "No output yet. Upload a meta.csv and click Process Meta."
+    else paste(bat1_rv$log_lines, collapse = "\n")
+  })
+
+  output$bat1_preview_table <- renderTable({
+    req(bat1_rv$preview_data)
+    head(bat1_rv$preview_data, 50)
+  }, striped = TRUE, hover = TRUE, bordered = TRUE, na = "")
+
+  output$bat1_download_ui <- renderUI({
+    req(bat1_rv$meta_path)
+    tagList(
+      downloadButton("bat1_download_meta",
+                     label = tagList(bsicons::bs_icon("download"), " Download cleaned meta (.csv)"),
+                     class = "btn-success w-100 mb-2"),
+      if (!is.null(bat1_rv$zip_path))
+        downloadButton("bat1_download_wav",
+                       label = tagList(bsicons::bs_icon("download"), " Download sorted .wav (.zip)"),
+                       class = "btn-success w-100")
+    )
+  })
+
+  output$bat1_download_meta <- downloadHandler(
+    filename = function() basename(bat1_rv$meta_path),
+    content  = function(file) { req(bat1_rv$meta_path); file.copy(bat1_rv$meta_path, file) }
+  )
+
+  output$bat1_download_wav <- downloadHandler(
+    filename = function() "bat_sorted_wav.zip",
+    content  = function(file) { req(bat1_rv$zip_path); file.copy(bat1_rv$zip_path, file) }
+  )
+
+
+  # ── Bat: Step 2 Combine Meta ─────────────────────────────────────────────
+  bat2_meta_dir_sel <- reactive({
+    req(input$bat2_meta_dir)
+    parseDirPath(volumes, input$bat2_meta_dir)
+  })
+
+  output$bat2_meta_dir_display <- renderText({
+    d <- tryCatch(bat2_meta_dir_sel(), error = function(e) "")
+    if (length(d) == 0 || d == "") "No folder selected." else d
+  })
+
+  bat2_rv <- reactiveValues(
+    log_lines    = character(0),
+    output_path  = NULL,
+    preview_data = NULL
+  )
+  bat2_log <- make_logger(bat2_rv)
+
+  observeEvent(input$bat2_run_btn, {
+    bat2_rv$log_lines    <- character(0)
+    bat2_rv$output_path  <- NULL
+    bat2_rv$preview_data <- NULL
+
+    meta_dir <- tryCatch(bat2_meta_dir_sel(), error = function(e) "")
+    if (length(meta_dir) == 0 || meta_dir == "") { bat2_log("ERROR: Please select the folder of cleaned/matched CSVs."); return() }
+
+    withProgress(message = "Combining meta files...", value = 0, {
+      tryCatch({
+        incProgress(0.2)
+        out_path <- combine_bat_meta(
+          meta_folder = meta_dir,
+          output_dir  = file.path(tempdir(), "bat_combine"),
+          log         = bat2_log
+        )
+        bat2_rv$output_path  <- out_path
+        bat2_rv$preview_data <- tryCatch(read.csv(out_path), error = function(e) NULL)
+        incProgress(0.8)
+
+      }, error = function(e) bat2_log(paste("ERROR:", conditionMessage(e))))
+    })
+  })
+
+  output$bat2_log_output <- renderText({
+    if (length(bat2_rv$log_lines) == 0) "No output yet. Select a folder and click Combine."
+    else paste(bat2_rv$log_lines, collapse = "\n")
+  })
+
+  output$bat2_preview_table <- renderTable({
+    req(bat2_rv$preview_data)
+    head(bat2_rv$preview_data, 50)
+  }, striped = TRUE, hover = TRUE, bordered = TRUE, na = "")
+
+  output$bat2_download_ui <- renderUI({
+    req(bat2_rv$output_path)
+    downloadButton("bat2_download_btn",
+                   label = tagList(bsicons::bs_icon("download"), " Download combined meta (.csv)"),
+                   class = "btn-success w-100")
+  })
+
+  output$bat2_download_btn <- downloadHandler(
+    filename = function() "meta_combined.csv",
+    content  = function(file) { req(bat2_rv$output_path); file.copy(bat2_rv$output_path, file) }
+  )
+
+
+  # ── Bat: Sub-sample Files ────────────────────────────────────────────────
+  bat_sub_raw_dir_sel <- reactive({
+    req(input$bat_sub_raw_dir)
+    parseDirPath(volumes, input$bat_sub_raw_dir)
+  })
+
+  output$bat_sub_raw_dir_display <- renderText({
+    d <- tryCatch(bat_sub_raw_dir_sel(), error = function(e) "")
+    if (length(d) == 0 || d == "") "No folder selected." else d
+  })
+
+  bat_sub_rv <- reactiveValues(log_lines = character(0))
+  bat_sub_log <- make_logger(bat_sub_rv)
+
+  observeEvent(input$bat_sub_run_btn, {
+    bat_sub_rv$log_lines <- character(0)
+
+    raw_dir <- tryCatch(bat_sub_raw_dir_sel(), error = function(e) "")
+    if (length(raw_dir) == 0 || raw_dir == "") { bat_sub_log("ERROR: Please select the folder of raw .wav files."); return() }
+
+    mins <- suppressWarnings(as.integer(trimws(strsplit(input$bat_sub_mins, ",")[[1]])))
+    mins <- mins[!is.na(mins)]
+    if (length(mins) == 0) { bat_sub_log("ERROR: No valid minutes entered. Enter comma-separated integers, e.g. 0,1,2,3,4."); return() }
+
+    withProgress(message = "Sub-sampling files...", value = 0, {
+      tryCatch({
+        incProgress(0.2)
+        path_out <- subsample_bat_files(
+          path_raw       = raw_dir,
+          subsample_mins = mins,
+          log            = bat_sub_log
+        )
+        incProgress(0.8)
+
+      }, error = function(e) bat_sub_log(paste("ERROR:", conditionMessage(e))))
+    })
+  })
+
+  output$bat_sub_log_output <- renderText({
+    if (length(bat_sub_rv$log_lines) == 0) "No output yet. Select a folder and click Sub-sample."
+    else paste(bat_sub_rv$log_lines, collapse = "\n")
+  })
+
+
+  # ── Bat: Recover Meta ────────────────────────────────────────────────────
+  bat_rec_proc_dir_sel <- reactive({
+    req(input$bat_rec_proc_dir)
+    parseDirPath(volumes, input$bat_rec_proc_dir)
+  })
+
+  bat_rec_raw_dir_sel <- reactive({
+    req(input$bat_rec_raw_dir)
+    parseDirPath(volumes, input$bat_rec_raw_dir)
+  })
+
+  output$bat_rec_proc_dir_display <- renderText({
+    d <- tryCatch(bat_rec_proc_dir_sel(), error = function(e) "")
+    if (length(d) == 0 || d == "") "No folder selected." else d
+  })
+
+  output$bat_rec_raw_dir_display <- renderText({
+    d <- tryCatch(bat_rec_raw_dir_sel(), error = function(e) "")
+    if (length(d) == 0 || d == "") "No folder selected." else d
+  })
+
+  bat_rec_rv <- reactiveValues(
+    log_lines    = character(0),
+    output_path  = NULL,
+    preview_data = NULL
+  )
+  bat_rec_log <- make_logger(bat_rec_rv)
+
+  observeEvent(input$bat_rec_run_btn, {
+    bat_rec_rv$log_lines    <- character(0)
+    bat_rec_rv$output_path  <- NULL
+    bat_rec_rv$preview_data <- NULL
+
+    proc_dir <- tryCatch(bat_rec_proc_dir_sel(), error = function(e) "")
+    raw_dir  <- tryCatch(bat_rec_raw_dir_sel(),  error = function(e) "")
+    if (length(proc_dir) == 0 || proc_dir == "") { bat_rec_log("ERROR: Please select the sorted (processed) folder."); return() }
+    if (length(raw_dir)  == 0 || raw_dir  == "") { bat_rec_log("ERROR: Please select the raw folder.");               return() }
+
+    withProgress(message = "Recovering meta.csv...", value = 0, {
+      tryCatch({
+        incProgress(0.1)
+        out_path <- recover_bat_meta(
+          path_processed = proc_dir,
+          path_raw       = raw_dir,
+          output_dir     = file.path(tempdir(), "bat_recover"),
+          log            = bat_rec_log
+        )
+        bat_rec_rv$output_path  <- out_path
+        bat_rec_rv$preview_data <- tryCatch(read.csv(out_path), error = function(e) NULL)
+        incProgress(0.9)
+
+      }, error = function(e) bat_rec_log(paste("ERROR:", conditionMessage(e))))
+    })
+  })
+
+  output$bat_rec_log_output <- renderText({
+    if (length(bat_rec_rv$log_lines) == 0) "No output yet. Select the sorted and raw folders and click Recover Meta."
+    else paste(bat_rec_rv$log_lines, collapse = "\n")
+  })
+
+  output$bat_rec_preview_table <- renderTable({
+    req(bat_rec_rv$preview_data)
+    head(bat_rec_rv$preview_data, 50)
+  }, striped = TRUE, hover = TRUE, bordered = TRUE, na = "")
+
+  output$bat_rec_download_ui <- renderUI({
+    req(bat_rec_rv$output_path)
+    downloadButton("bat_rec_download_btn",
+                   label = tagList(bsicons::bs_icon("download"), " Download meta_reverse (.csv)"),
+                   class = "btn-success w-100")
+  })
+
+  output$bat_rec_download_btn <- downloadHandler(
+    filename = function() "meta_reverse.csv",
+    content  = function(file) { req(bat_rec_rv$output_path); file.copy(bat_rec_rv$output_path, file) }
+  )
 }
 
 
