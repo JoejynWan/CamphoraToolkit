@@ -11,7 +11,7 @@
 
 #### Helper ####
 
-read_exif_parallel <- function(dir_path){
+read_exif_parallel_wav <- function(dir_path){
 
   num_cores <- detectCores() - 1
   cl <- makeCluster(num_cores)
@@ -57,7 +57,7 @@ recover_bat_meta <- function(path_processed, path_raw, output_dir = path_process
            MANUAL.ID = basename(dirname(files_processed)))
 
   log("Reading raw .wav EXIF timestamps (this may take a while)...")
-  data_raw <- read_exif_parallel(path_raw) %>%
+  data_raw <- read_exif_parallel_wav(path_raw) %>%
     select(FileName, FileModifyDate, Duration) %>%
     mutate(DateTime = as.POSIXct(FileModifyDate, format = "%Y:%m:%d %H:%M:%S", tz = "Singapore"),
            DATE = format(DateTime, "%d/%m/%Y"),

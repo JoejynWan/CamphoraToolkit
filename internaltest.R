@@ -1,6 +1,28 @@
 #### Installing and loading required packages ####
 rm(list = ls())
 
+library(fs)
+library(zip)
+library(exifr)
+library(batch)
+library(tools)
+library(shiny)
+library(bslib)
+library(vegan)
+library(magick)
+library(rlang)
+library(knitr)
+library(pbapply)
+library(RSQLite)
+library(bsicons)
+library(parallel)
+library(openxlsx)
+library(camtrapR)
+library(lubridate)
+library(rmarkdown)
+library(tidyverse)
+library(shinyFiles)
+
 ## Set the working directory to the folder containing this script
 setwd("C:/Users/Joejyn/OneDrive/Camphora/Data_analysis/CamphoraToolkitHub_Git/")
 
@@ -26,9 +48,6 @@ source("apps/BatRecordingProcessing/Step2_combine_meta.R")
 source("apps/BatRecordingProcessing/subsample.R")
 source("apps/BatRecordingProcessing/recover_meta.R")
 
-library(tools)
-library(lubridate)
-
 
 #### Fixed Variables ####
 SPECIES_DB_PATH     <- "apps/CameraTrapProcessing/data/Species_Database.xlsx"
@@ -39,8 +58,8 @@ BAT_SPECIES_DB_PATH <- "apps/BatRecordingProcessing/data/Species_Database_Bats.c
 
 #### CT Step 1: EXIF Extraction ####
 ## Uncomment and fill in paths before running
-path_processed <- "Z:/path/to/processed/station_folder"
-path_raw       <- "Z:/path/to/raw/station_folder"
+path_processed <- "G:/Shared drives/01_Current_Projects_A-D/CR202 EMMP_Obayashi/02_Camera_Trapping/Camera_Trap_Data/02 Processed/Eng Neo Forest Monitoring/39 - July 2026/"
+path_raw       <- "G:/Shared drives/01_Current_Projects_A-D/CR202 EMMP_Obayashi/02_Camera_Trapping/Camera_Trap_Data/01 Raw/Eng Neo Forest Monitoring/39 - July 2026/"
 
 extract_exif(
   path_processed        = path_processed,
