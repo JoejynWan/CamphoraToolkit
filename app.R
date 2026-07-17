@@ -1,8 +1,8 @@
 ## app.R
 ## Camphora Toolkit Hub — unified Shiny front-end.
-## Integrates Camera Trap Processing, Abiotic Monitoring, Fauna Impact
-## Assessment, Arbo Report, Stream Inspection, and Bat Recording Processing
-## alongside the project directory hub.
+## Integrates Camera Trap Processing, Abiotic Monitoring, Fauna Impact Assessment, Arbo Report,
+## Stream Inspection, Bat Recording Processing, and Flora Photo Filing alongside the project
+## directory hub.
 ##
 ## Runs locally via launcher: shiny::runGitHub("CamphoraToolkit", "JoejynWan")
 ## Or directly:               shiny::runApp(".")
@@ -50,19 +50,22 @@ source("apps/BatRecordingProcessing/Step1_process_meta.R")
 source("apps/BatRecordingProcessing/Step2_combine_meta.R")
 source("apps/BatRecordingProcessing/subsample.R")
 source("apps/BatRecordingProcessing/recover_meta.R")
+source("apps/FloraPhotoFiling/modules/utils.R")
+source("apps/FloraPhotoFiling/sort_photos.R")
+source("apps/FloraPhotoFiling/resort_tag_dirs.R")
 
 SPECIES_DB_PATH     <- "apps/CameraTrapProcessing/data/Species_Database.xlsx"
 IA_MATRIX_PATH      <- "apps/ImpactAssessment/data/ConsequenceSignificanceMatrix.xlsx"
 ARBO_RMD_PATH       <- "apps/ArboReport/modules/arboreport_full.Rmd"
 BAT_SPECIES_DB_PATH <- "apps/BatRecordingProcessing/data/Species_Database_Bats.csv"
-VERSION         <- "v2.5"
-UPDATE_DATE     <- "2026-07-07"
+VERSION         <- "v2.6"
+UPDATE_DATE     <- "2026-07-17"
 
 
-# ── Project Registry ────────────────────────────────────────────────────────
-# nav_target: value of a nav_panel in this app; NULL = external url or disabled
-# version/updated: per-app tracking only (independent of the Hub's own VERSION
-# above) — bump these whenever that app's own logic/tabs change.
+# ── Project Registry ──────────────────────────────────────────────────────────────────────────────
+# nav_target: value of a nav_panel in this app; NULL = external url or disabled. version/updated:
+# per-app tracking only (independent of the Hub's own VERSION above) — bump these whenever that
+# app's own logic/tabs change.
 PROJECTS <- list(
 
   list(
@@ -99,7 +102,7 @@ PROJECTS <- list(
     nav_target  = "ct_step1",
     icon        = "camera",
     category    = "Fauna",
-    status      = "beta",
+    status      = "live",
     version     = "v2.1",
     updated     = "2026-07-03"
   ),
@@ -112,8 +115,8 @@ PROJECTS <- list(
     nav_target  = "arbo_report",
     icon        = "tree",
     category    = "Flora",
-    status      = "beta",
-    version     = "v1.0",
+    status      = "live",
+    version     = "v2.4",
     updated     = "2026-07-03"
   ),
 
@@ -125,7 +128,7 @@ PROJECTS <- list(
     nav_target  = "stream_report",
     icon        = "water",
     category    = "Fauna",
-    status      = "beta",
+    status      = "live",
     version     = "v1.2",
     updated     = "2026-07-07"
   ),
@@ -138,12 +141,37 @@ PROJECTS <- list(
     nav_target  = "bat_step1",
     icon        = "soundwave",
     category    = "Fauna",
-    status      = "beta",
+    status      = "live",
     version     = "v1.5",
     updated     = "2026-07-07"
+  ),
+
+  list(
+    title       = "BTNR Flora Photo Filing",
+    description = "Files flora survey photos into Family/Species/Tag folders
+                   using the photo filing sheet of the master datasheet.",
+    url         = NULL,
+    nav_target  = "flora_sort",
+    icon        = "folder",
+    category    = "Flora",
+    status      = "beta",
+    version     = "v1.0",
+    updated     = "2026-07-17"
+  ), 
+  
+  list(
+    title       = "CAG Photo Renaming",
+    description = "Renames flora/arbo photos based on Tree ID in an excel datasheet.",
+    url         = NULL,
+    nav_target  = NULL,
+    icon        = "images",
+    category    = "Flora",
+    status      = "coming soon",
+    version     = "v1.0",
+    updated     = "2026-07-17"
   )
 
-  ## ── Paste new entries below this line ──────────────────────────────────────
+  ## ── Paste new entries above this line ──────────────────────────────────────────────────────────
   #
   # list(
   #   title       = "My New Tool",
@@ -161,7 +189,8 @@ PROJECTS <- list(
 
 
 #### Helper Functions ####
-## IMPORTANT: icon_text() is called inside page_navbar() — must be defined before ui <-
+## IMPORTANT: icon_text() is called inside page_navbar() — it must be defined before ui <-, or R
+## throws "could not find function" on startup.
 
 icon_text <- function(label, icon_name) {
   tagList(bsicons::bs_icon(icon_name), " ", label)
@@ -174,12 +203,12 @@ make_logger <- function(rv) {
   }
 }
 
-# ── Hub helpers ──────────────────────────────────────────────────────────────
+# ── Hub helpers ───────────────────────────────────────────────────────────────────────────────────
 
 all_categories <- function() sort(unique(sapply(PROJECTS, `[[`, "category")))
 
-## Looks up a project's own version/updated metadata by its nav_target, for
-## display on Hub cards and in the About page. Returns NULL if not found.
+## Looks up a project's own version/updated metadata by its nav_target, for display on Hub cards
+## and in the About page. Returns NULL if not found.
 get_project_meta <- function(nav_target) {
   match <- Filter(function(p) identical(p$nav_target, nav_target), PROJECTS)
   if (length(match) == 0) NULL else match[[1]]
@@ -191,9 +220,8 @@ project_version_label <- function(p) {
   paste0(p$version, if (!is.null(p$updated) && !is.na(p$updated)) paste0(" · ", p$updated) else "")
 }
 
-## Panel title for the About page's accordion — app name + icon + version, so
-## adding a new app only means adding one more accordion_panel, not rewriting
-## a flat card grid.
+## Panel title for the About page's accordion — app name + icon + version, so adding a new app only
+## means adding one more accordion_panel, not rewriting a flat card grid.
 about_panel_title <- function(app_title, nav_target, icon_name) {
   meta  <- get_project_meta(nav_target)
   label <- if (!is.null(meta)) project_version_label(meta) else ""
@@ -349,7 +377,7 @@ ui <- page_navbar(
   "))),
 
 
-  # ── Hub Tab ───────────────────────────────────────────────────────────────
+  # ── Hub Tab ─────────────────────────────────────────────────────────────────────────────────────
   nav_panel(
     title = icon_text("Hub", "grid-3x3-gap-fill"),
     value = "hub",
@@ -374,7 +402,7 @@ ui <- page_navbar(
   ),
 
 
-  # ── Fauna Impact Assessment ──────────────────────────────────────────────
+  # ── Fauna Impact Assessment ─────────────────────────────────────────────────────────────────────
   nav_panel(
     title = icon_text("Impact Assessment", "bug"),
     value = "impact_assessment",
@@ -426,7 +454,7 @@ ui <- page_navbar(
   ),
 
 
-  # ── Camera Traps ──────────────────────────────────────────────────────────
+  # ── Camera Traps ────────────────────────────────────────────────────────────────────────────────
   nav_menu(
     title = icon_text("Camera Traps", "camera"),
 
@@ -622,7 +650,7 @@ ui <- page_navbar(
   ),
 
 
-  # ── Abiotic Monitoring ────────────────────────────────────────────────────
+  # ── Abiotic Monitoring ──────────────────────────────────────────────────────────────────────────
   nav_menu(
     title = icon_text("Abiotic Monitoring", "moisture"),
 
@@ -736,7 +764,7 @@ ui <- page_navbar(
   ),
 
 
-  # ── Arbo Report ───────────────────────────────────────────────────────────
+  # ── Arbo Report ─────────────────────────────────────────────────────────────────────────────────
   nav_menu(
     title = icon_text("Arbo Report", "tree"),
 
@@ -875,7 +903,7 @@ ui <- page_navbar(
   ),
 
 
-  # ── Stream Inspection Report ──────────────────────────────────────────────
+  # ── Stream Inspection Report ────────────────────────────────────────────────────────────────────
   nav_panel(
     title = icon_text("Stream Inspection", "water"),
     value = "stream_report",
@@ -931,7 +959,7 @@ ui <- page_navbar(
   ),
 
 
-  # ── Bat Recording Processing ──────────────────────────────────────────────
+  # ── Bat Recording Processing ────────────────────────────────────────────────────────────────────
   nav_menu(
     title = icon_text("Bat Recordings", "soundwave"),
 
@@ -1131,9 +1159,132 @@ ui <- page_navbar(
   ),
 
 
-  # ── About Tab ─────────────────────────────────────────────────────────────
-  # One accordion_panel per app, grouping that app's cards — adding a new app
-  # means adding one more accordion_panel(), not editing a flat card grid.
+  # ── Flora Photo Filing ──────────────────────────────────────────────────────────────────────────
+  nav_menu(
+    title = icon_text("Flora Photos", "images"),
+
+    # Sort Photos
+    nav_panel(
+      title = icon_text("Sort Photos", "folder-symlink"),
+      value = "flora_sort",
+
+      layout_sidebar(
+        fillable = TRUE,
+        sidebar = sidebar(
+          width = 340,
+
+          h5("Input file", class = "fw-bold mt-1"),
+          fileInput("flora_datasheet_file",
+                    label = tooltip(
+                      span("Master datasheet (.xlsx)", bsicons::bs_icon("info-circle")),
+                      "Must contain the photo filing sheet, with STATUS, TAG_2025, Family, Species, ZOOM_CAM, ZOOM_PHOTO_ID, FS_CAM and FS_PHOTO_ID columns."
+                    ),
+                    accept = ".xlsx", multiple = FALSE),
+
+          textInput("flora_sheet_name",
+                    label = tooltip(
+                      span("Photo filing sheet name", bsicons::bs_icon("info-circle")),
+                      "Name of the sheet in the datasheet holding the photo filing table."
+                    ),
+                    value = "Photo Filing (For JO)"),
+
+          hr(),
+          h5("Input/output folders", class = "fw-bold mt-1"),
+
+          p(class = "mb-1",
+            tooltip(span("Raw photos folder", bsicons::bs_icon("info-circle")),
+                    "Folder containing the per-session photo folders named in the ZOOM_CAM and FS_CAM columns.")),
+          shinyDirButton("flora_photos_dir", label = "Browse...",
+                         title = "Choose raw photos directory",
+                         class = "btn-outline-secondary w-100 mb-1"),
+          verbatimTextOutput("flora_photos_dir_display", placeholder = TRUE),
+
+          p(class = "mb-1 mt-2",
+            tooltip(span("Sorted photos folder", bsicons::bs_icon("info-circle")),
+                    "Destination folder. Photos are filed as Family/Species/Tag/Tag_photo.jpg.")),
+          shinyDirButton("flora_sorted_dir", label = "Browse...",
+                         title = "Choose sorted photos directory",
+                         class = "btn-outline-secondary w-100 mb-1"),
+          verbatimTextOutput("flora_sorted_dir_display", placeholder = TRUE),
+
+          hr(),
+          h5("Parameters", class = "fw-bold mt-1"),
+          textInput("flora_status",
+                    label = tooltip(
+                      span("STATUS to sort", bsicons::bs_icon("info-circle")),
+                      "Comma-separated STATUS values to file, e.g. Batch 3.1, Batch 3.2."
+                    ),
+                    placeholder = "e.g. Batch 3.1, Batch 3.2"),
+
+          hr(),
+          actionButton("flora_run_btn",
+                       label = tagList(bsicons::bs_icon("play-fill"), " Sort Photos"),
+                       class = "btn-primary w-100")
+        ),
+
+        layout_column_wrap(
+          width = 1,
+          card(card_header(tagList(bsicons::bs_icon("terminal"), " Log")),
+               verbatimTextOutput("flora_log_output"), height = 220),
+          card(card_header(tagList(bsicons::bs_icon("table"), " Photos filed per tag (first 50 rows)")),
+               div(style = "overflow-x: auto;", tableOutput("flora_preview_table")))
+        )
+      )
+    ),
+
+    # Re-sort Tag Folders
+    nav_panel(
+      title = icon_text("Re-sort Tag Folders", "diagram-3"),
+      value = "flora_resort",
+
+      layout_sidebar(
+        fillable = TRUE,
+        sidebar = sidebar(
+          width = 340,
+
+          div(class = "alert alert-warning small",
+              bsicons::bs_icon("exclamation-triangle"), " ",
+              "Only needed for older batches sorted as Family/Species, before per-tag subfolders were introduced."),
+
+          h5("Input/output folders", class = "fw-bold mt-1"),
+
+          p(class = "mb-1",
+            tooltip(span("Existing sorted folder", bsicons::bs_icon("info-circle")),
+                    "Folder structured as Family/Species/Tag_photo.jpg. The tag is read from the file name, up to the first underscore.")),
+          shinyDirButton("flora_resort_src_dir", label = "Browse...",
+                         title = "Choose existing sorted directory",
+                         class = "btn-outline-secondary w-100 mb-1"),
+          verbatimTextOutput("flora_resort_src_dir_display", placeholder = TRUE),
+
+          p(class = "mb-1 mt-2",
+            tooltip(span("Updated folder", bsicons::bs_icon("info-circle")),
+                    "Destination folder for the restructured Family/Species/Tag tree.")),
+          shinyDirButton("flora_resort_dest_dir", label = "Browse...",
+                         title = "Choose updated directory",
+                         class = "btn-outline-secondary w-100 mb-1"),
+          verbatimTextOutput("flora_resort_dest_dir_display", placeholder = TRUE),
+
+          hr(),
+          actionButton("flora_resort_run_btn",
+                       label = tagList(bsicons::bs_icon("play-fill"), " Re-sort Folders"),
+                       class = "btn-primary w-100")
+        ),
+
+        layout_column_wrap(
+          width = 1,
+          card(card_header(tagList(bsicons::bs_icon("terminal"), " Log")),
+               verbatimTextOutput("flora_resort_log_output"), height = 220),
+          card(card_header(tagList(bsicons::bs_icon("table"), " Photos re-sorted per tag (first 50 rows)")),
+               div(style = "overflow-x: auto;", tableOutput("flora_resort_preview_table")))
+        )
+      )
+    )
+  ),
+
+
+  # ── About Tab ───────────────────────────────────────────────────────────────────────────────────
+  # One accordion_panel per app, grouping that app's cards — adding a new app means adding one more
+  # accordion_panel(), not editing a flat card grid.
   nav_panel(
     title = icon_text("About", "info-circle"),
     value = "about",
@@ -1151,7 +1302,7 @@ ui <- page_navbar(
           card_body(
             p("Converts a list of recorded and/or probable fauna species into a formatted Excel impact assessment template."),
             tags$ol(
-              tags$li("Upload the ", strong("species list"), " (.xlsx) — must contain a ", code("Scientific Name"), " column."),
+              tags$li("Upload the ", strong("species list"), " (.xlsx) — must contain a ", code("Scientific Name"), " column. Note that this is case sensitive."),
               tags$li("Upload the ", strong("fauna database"), " (.xlsx) containing the ", em("CS species impact intensity"), " sheet."),
               tags$li("Click ", strong("Run Assessment"), "."),
               tags$li("Download the formatted output workbook.")
@@ -1428,6 +1579,54 @@ ui <- page_navbar(
             )
           )
         )
+      ),
+
+      accordion_panel(
+        value = "about_flora",
+        title = about_panel_title("BTNR Flora Photo Filing", "flora_sort", "images"),
+
+        layout_column_wrap(
+          width = 1 / 2,
+
+          card(
+            card_header("Sort Photos"),
+            card_body(
+              p("Files raw flora survey photos into ", code("Family/Species/Tag"), " folders, using the photo filing sheet of the project master datasheet to look up which photos belong to which tagged specimen."),
+              tags$ol(
+                tags$li("Upload the ", strong("master datasheet"), " (.xlsx) and confirm the photo filing sheet name."),
+                tags$li("Select the ", strong("raw photos folder"), " — the parent of the per-session folders named in ", code("ZOOM_CAM"), " and ", code("FS_CAM"), "."),
+                tags$li("Select the ", strong("sorted photos folder"), " to file into."),
+                tags$li("Enter the ", strong("STATUS"), " value(s) to sort, e.g. ", code("Batch 3.1, Batch 3.2"), "."),
+                tags$li("Click ", strong("Sort Photos"), ".")
+              ),
+              hr(),
+              p(strong("Output:")),
+              tags$ul(
+                tags$li("Photos copied to ", code("Family/Species/Tag/Tag_photo.jpg"), " — existing copies are skipped, so re-runs are safe."),
+                tags$li("Photos whose family or species changed since the last run are removed from their old location, and empty folders cleaned up.")
+              ),
+              hr(),
+              p(class = "mb-0",
+                strong("Note: "),
+                "the run stops with an error if any photo folder named in the datasheet is missing or misnamed, or if a photo number resolves to no file. Fix the datasheet and re-run.")
+            )
+          ),
+
+          card(
+            card_header("Re-sort Tag Folders"),
+            card_body(
+              p("Restructures an older ", code("Family/Species"), " photo tree into ", code("Family/Species/Tag"), ". Only needed for batches sorted before per-tag subfolders were introduced."),
+              tags$ol(
+                tags$li("Select the ", strong("existing sorted folder"), "."),
+                tags$li("Select an ", strong("updated folder"), " for the restructured copy."),
+                tags$li("Click ", strong("Re-sort Folders"), ".")
+              ),
+              hr(),
+              p(strong("Output:")),
+              tags$ul(tags$li("A copy of the tree with a per-tag level inserted, where the tag is read from each file name up to the first underscore."))
+            )
+          )
+        )
       )
     ),
 
@@ -1450,7 +1649,7 @@ ui <- page_navbar(
 
 server <- function(input, output, session) {
 
-  # ── Shared: shinyFiles volumes (all local drives including Google Drive G:) ──
+  # ── Shared: shinyFiles volumes (all local drives including Google Drive G:) ─────────────────────
   volumes <- c(Home = fs::path_home(), getVolumes()())
 
   shinyDirChoose(input, "s1_path_processed",     roots = volumes, session = session)
@@ -1465,9 +1664,13 @@ server <- function(input, output, session) {
   shinyDirChoose(input, "bat_sub_raw_dir",       roots = volumes, session = session)
   shinyDirChoose(input, "bat_rec_proc_dir",      roots = volumes, session = session)
   shinyDirChoose(input, "bat_rec_raw_dir",       roots = volumes, session = session)
+  shinyDirChoose(input, "flora_photos_dir",      roots = volumes, session = session)
+  shinyDirChoose(input, "flora_sorted_dir",      roots = volumes, session = session)
+  shinyDirChoose(input, "flora_resort_src_dir",  roots = volumes, session = session)
+  shinyDirChoose(input, "flora_resort_dest_dir", roots = volumes, session = session)
 
 
-  # ── Hub: filter bar + card grid + in-app navigation ──────────────────────
+  # ── Hub: filter bar + card grid + in-app navigation ─────────────────────────────────────────────
   selected_category <- reactiveVal("All")
 
   output$filter_bar <- renderUI({
@@ -1503,7 +1706,7 @@ server <- function(input, output, session) {
   })
 
 
-  # ── Fauna Impact Assessment ──────────────────────────────────────────────
+  # ── Fauna Impact Assessment ─────────────────────────────────────────────────────────────────────
   ia_rv <- reactiveValues(
     log_lines    = character(0),
     output_path  = NULL,
@@ -1574,7 +1777,7 @@ server <- function(input, output, session) {
   )
 
 
-  # ── CT Step 1: EXIF Extraction ────────────────────────────────────────────
+  # ── CT Step 1: EXIF Extraction ──────────────────────────────────────────────────────────────────
   s1_rv <- reactiveValues(
     log_lines    = character(0),
     output_path  = NULL,
@@ -1662,7 +1865,7 @@ server <- function(input, output, session) {
   )
 
 
-  # ── CT Step 1.1: Offset DateTime ─────────────────────────────────────────
+  # ── CT Step 1.1: Offset DateTime ────────────────────────────────────────────────────────────────
   s1a_rv <- reactiveValues(
     log_lines    = character(0),
     output_path  = NULL,
@@ -1719,7 +1922,7 @@ server <- function(input, output, session) {
   )
 
 
-  # ── CT Step 2: Merge EXIFs ────────────────────────────────────────────────
+  # ── CT Step 2: Merge EXIFs ──────────────────────────────────────────────────────────────────────
   s2_rv <- reactiveValues(
     log_lines    = character(0),
     path_all     = NULL,
@@ -1805,7 +2008,7 @@ server <- function(input, output, session) {
   )
 
 
-  # ── CT Step 3: Independent Detections ────────────────────────────────────
+  # ── CT Step 3: Independent Detections ───────────────────────────────────────────────────────────
   s3_rv <- reactiveValues(
     log_lines    = character(0),
     zip_path     = NULL,
@@ -1876,7 +2079,7 @@ server <- function(input, output, session) {
   )
 
 
-  # ── Abiotic: Water Monitoring ─────────────────────────────────────────────
+  # ── Abiotic: Water Monitoring ───────────────────────────────────────────────────────────────────
   water_rv <- reactiveValues(
     log_lines    = character(0),
     output_path  = NULL,
@@ -1941,7 +2144,7 @@ server <- function(input, output, session) {
   )
 
 
-  # ── Abiotic: Noise Monitoring ─────────────────────────────────────────────
+  # ── Abiotic: Noise Monitoring ───────────────────────────────────────────────────────────────────
   noise_rv <- reactiveValues(
     log_lines    = character(0),
     output_path  = NULL,
@@ -2015,7 +2218,7 @@ server <- function(input, output, session) {
   )
 
 
-  # ── Arbo Report: Generate Report ─────────────────────────────────────────
+  # ── Arbo Report: Generate Report ────────────────────────────────────────────────────────────────
   arbo_photos_dir_sel <- reactive({
     req(input$arbo_photos_dir)
     parseDirPath(volumes, input$arbo_photos_dir)
@@ -2105,7 +2308,7 @@ server <- function(input, output, session) {
   )
 
 
-  # ── Arbo Report: Resize Photos ───────────────────────────────────────────
+  # ── Arbo Report: Resize Photos ──────────────────────────────────────────────────────────────────
   arbophoto_source_dir_sel <- reactive({
     req(input$arbophoto_source_dir)
     parseDirPath(volumes, input$arbophoto_source_dir)
@@ -2159,7 +2362,7 @@ server <- function(input, output, session) {
   })
 
 
-  # ── Stream Inspection Report ─────────────────────────────────────────────
+  # ── Stream Inspection Report ────────────────────────────────────────────────────────────────────
   si_photos_dir_sel <- reactive({
     req(input$si_photos_dir)
     parseDirPath(volumes, input$si_photos_dir)
@@ -2239,7 +2442,7 @@ server <- function(input, output, session) {
   )
 
 
-  # ── Bat: Step 1 Process Meta ─────────────────────────────────────────────
+  # ── Bat: Step 1 Process Meta ────────────────────────────────────────────────────────────────────
   bat1_wav_dir_sel <- reactive({
     req(input$bat1_wav_dir)
     parseDirPath(volumes, input$bat1_wav_dir)
@@ -2351,7 +2554,7 @@ server <- function(input, output, session) {
   )
 
 
-  # ── Bat: Step 2 Combine Meta ─────────────────────────────────────────────
+  # ── Bat: Step 2 Combine Meta ────────────────────────────────────────────────────────────────────
   bat2_meta_dir_sel <- reactive({
     req(input$bat2_meta_dir)
     parseDirPath(volumes, input$bat2_meta_dir)
@@ -2416,7 +2619,7 @@ server <- function(input, output, session) {
   )
 
 
-  # ── Bat: Sub-sample Files ────────────────────────────────────────────────
+  # ── Bat: Sub-sample Files ───────────────────────────────────────────────────────────────────────
   bat_sub_raw_dir_sel <- reactive({
     req(input$bat_sub_raw_dir)
     parseDirPath(volumes, input$bat_sub_raw_dir)
@@ -2460,7 +2663,7 @@ server <- function(input, output, session) {
   })
 
 
-  # ── Bat: Recover Meta ────────────────────────────────────────────────────
+  # ── Bat: Recover Meta ───────────────────────────────────────────────────────────────────────────
   bat_rec_proc_dir_sel <- reactive({
     req(input$bat_rec_proc_dir)
     parseDirPath(volumes, input$bat_rec_proc_dir)
@@ -2536,6 +2739,153 @@ server <- function(input, output, session) {
     filename = function() "meta_reverse.csv",
     content  = function(file) { req(bat_rec_rv$output_path); file.copy(bat_rec_rv$output_path, file) }
   )
+
+
+  # ── Flora Photo Filing: Sort Photos ─────────────────────────────────────────────────────────────
+  flora_rv <- reactiveValues(
+    log_lines    = character(0),
+    preview_data = NULL
+  )
+  flora_log <- make_logger(flora_rv)
+
+  flora_photos_dir_path <- reactive({
+    req(input$flora_photos_dir)
+    parseDirPath(volumes, input$flora_photos_dir)
+  })
+
+  flora_sorted_dir_path <- reactive({
+    req(input$flora_sorted_dir)
+    parseDirPath(volumes, input$flora_sorted_dir)
+  })
+
+  output$flora_photos_dir_display <- renderText({
+    d <- tryCatch(flora_photos_dir_path(), error = function(e) "")
+    if (length(d) == 0 || d == "") "No folder selected." else d
+  })
+
+  output$flora_sorted_dir_display <- renderText({
+    d <- tryCatch(flora_sorted_dir_path(), error = function(e) "")
+    if (length(d) == 0 || d == "") "No folder selected." else d
+  })
+
+  observeEvent(input$flora_run_btn, {
+
+    flora_rv$log_lines    <- character(0)
+    flora_rv$preview_data <- NULL
+
+    photos_dir <- tryCatch(flora_photos_dir_path(), error = function(e) "")
+    sorted_dir <- tryCatch(flora_sorted_dir_path(), error = function(e) "")
+
+    if (is.null(input$flora_datasheet_file))            { flora_log("ERROR: No datasheet uploaded."); return() }
+    if (length(photos_dir) == 0 || photos_dir == "")    { flora_log("ERROR: Please select a raw photos folder."); return() }
+    if (length(sorted_dir) == 0 || sorted_dir == "")    { flora_log("ERROR: Please select a sorted photos folder."); return() }
+    if (trimws(input$flora_sheet_name) == "")           { flora_log("ERROR: Please enter the photo filing sheet name."); return() }
+    if (trimws(input$flora_status) == "")               { flora_log("ERROR: Please enter at least one STATUS to sort."); return() }
+
+    status_to_sort <- trimws(unlist(strsplit(input$flora_status, ",")))
+    status_to_sort <- status_to_sort[nzchar(status_to_sort)]
+
+    withProgress(message = "Filing photos...", value = 0, {
+      tryCatch({
+
+        incProgress(0.1)
+
+        summary_df <- sort_flora_photos(
+          datasheet_path = input$flora_datasheet_file$datapath,
+          photos_dir     = photos_dir,
+          sorted_dir     = sorted_dir,
+          status_to_sort = status_to_sort,
+          sheet_name     = trimws(input$flora_sheet_name),
+          log            = flora_log
+        )
+
+        incProgress(0.8)
+        flora_rv$preview_data <- summary_df
+        flora_log(paste("Done! Photos filed into:", sorted_dir))
+
+      }, error = function(e) flora_log(paste("ERROR:", conditionMessage(e))))
+    })
+  })
+
+  output$flora_log_output <- renderText({
+    if (length(flora_rv$log_lines) == 0)
+      "No output yet. Upload a datasheet, select folders and click Sort Photos."
+    else paste(flora_rv$log_lines, collapse = "\n")
+  })
+
+  output$flora_preview_table <- renderTable({
+    req(flora_rv$preview_data)
+    head(flora_rv$preview_data, 50)
+  }, striped = TRUE, hover = TRUE, bordered = TRUE, na = "")
+
+
+  # ── Flora Photo Filing: Re-sort Tag Folders ─────────────────────────────────────────────────────
+  flora_resort_rv <- reactiveValues(
+    log_lines    = character(0),
+    preview_data = NULL
+  )
+  flora_resort_log <- make_logger(flora_resort_rv)
+
+  flora_resort_src_path <- reactive({
+    req(input$flora_resort_src_dir)
+    parseDirPath(volumes, input$flora_resort_src_dir)
+  })
+
+  flora_resort_dest_path <- reactive({
+    req(input$flora_resort_dest_dir)
+    parseDirPath(volumes, input$flora_resort_dest_dir)
+  })
+
+  output$flora_resort_src_dir_display <- renderText({
+    d <- tryCatch(flora_resort_src_path(), error = function(e) "")
+    if (length(d) == 0 || d == "") "No folder selected." else d
+  })
+
+  output$flora_resort_dest_dir_display <- renderText({
+    d <- tryCatch(flora_resort_dest_path(), error = function(e) "")
+    if (length(d) == 0 || d == "") "No folder selected." else d
+  })
+
+  observeEvent(input$flora_resort_run_btn, {
+
+    flora_resort_rv$log_lines    <- character(0)
+    flora_resort_rv$preview_data <- NULL
+
+    src_dir  <- tryCatch(flora_resort_src_path(),  error = function(e) "")
+    dest_dir <- tryCatch(flora_resort_dest_path(), error = function(e) "")
+
+    if (length(src_dir)  == 0 || src_dir  == "") { flora_resort_log("ERROR: Please select an existing sorted folder."); return() }
+    if (length(dest_dir) == 0 || dest_dir == "") { flora_resort_log("ERROR: Please select an updated folder."); return() }
+
+    withProgress(message = "Re-sorting folders...", value = 0, {
+      tryCatch({
+
+        incProgress(0.1)
+
+        summary_df <- resort_flora_tag_dirs(
+          sorted_dir  = src_dir,
+          updated_dir = dest_dir,
+          log         = flora_resort_log
+        )
+
+        incProgress(0.8)
+        flora_resort_rv$preview_data <- summary_df
+        flora_resort_log(paste("Done! Photos re-sorted into:", dest_dir))
+
+      }, error = function(e) flora_resort_log(paste("ERROR:", conditionMessage(e))))
+    })
+  })
+
+  output$flora_resort_log_output <- renderText({
+    if (length(flora_resort_rv$log_lines) == 0)
+      "No output yet. Select folders and click Re-sort Folders."
+    else paste(flora_resort_rv$log_lines, collapse = "\n")
+  })
+
+  output$flora_resort_preview_table <- renderTable({
+    req(flora_resort_rv$preview_data)
+    head(flora_resort_rv$preview_data, 50)
+  }, striped = TRUE, hover = TRUE, bordered = TRUE, na = "")
 }
 
 

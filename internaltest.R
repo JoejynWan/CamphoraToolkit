@@ -1,28 +1,6 @@
 #### Installing and loading required packages ####
 rm(list = ls())
 
-library(fs)
-library(zip)
-library(exifr)
-library(batch)
-library(tools)
-library(shiny)
-library(bslib)
-library(vegan)
-library(magick)
-library(rlang)
-library(knitr)
-library(pbapply)
-library(RSQLite)
-library(bsicons)
-library(parallel)
-library(openxlsx)
-library(camtrapR)
-library(lubridate)
-library(rmarkdown)
-library(tidyverse)
-library(shinyFiles)
-
 ## Set the working directory to the folder containing this script
 setwd("C:/Users/Joejyn/OneDrive/Camphora/Data_analysis/CamphoraToolkitHub_Git/")
 
@@ -47,6 +25,16 @@ source("apps/BatRecordingProcessing/Step1_process_meta.R")
 source("apps/BatRecordingProcessing/Step2_combine_meta.R")
 source("apps/BatRecordingProcessing/subsample.R")
 source("apps/BatRecordingProcessing/recover_meta.R")
+source("apps/FloraPhotoFiling/modules/utils.R")
+source("apps/FloraPhotoFiling/sort_photos.R")
+source("apps/FloraPhotoFiling/resort_tag_dirs.R")
+
+install_load_packages(c(
+  "shiny", "shinyFiles", "fs", "bslib", "bsicons",
+  "tidyverse", "openxlsx", "tools",
+  "exifr", "zip", "batch", "vegan", "RSQLite", "parallel", "camtrapR",
+  "rlang", "knitr", "rmarkdown", "magick", "pbapply"
+))
 
 
 #### Fixed Variables ####
@@ -58,8 +46,8 @@ BAT_SPECIES_DB_PATH <- "apps/BatRecordingProcessing/data/Species_Database_Bats.c
 
 #### CT Step 1: EXIF Extraction ####
 ## Uncomment and fill in paths before running
-path_processed <- "G:/Shared drives/01_Current_Projects_A-D/CR202 EMMP_Obayashi/02_Camera_Trapping/Camera_Trap_Data/02 Processed/Eng Neo Forest Monitoring/39 - July 2026/"
-path_raw       <- "G:/Shared drives/01_Current_Projects_A-D/CR202 EMMP_Obayashi/02_Camera_Trapping/Camera_Trap_Data/01 Raw/Eng Neo Forest Monitoring/39 - July 2026/"
+path_processed <- "G:/Shared drives/01_Current_Projects_A-D/CR202 EMMP_Obayashi/02_Camera_Trapping/Camera_Trap_Data/02 Processed/Eng Neo Forest Monitoring/38 - June 2026/"
+path_raw       <- "G:/Shared drives/01_Current_Projects_A-D/CR202 EMMP_Obayashi/02_Camera_Trapping/Camera_Trap_Data/01 Raw/Eng Neo Forest Monitoring/38 - June 2026/"
 
 extract_exif(
   path_processed        = path_processed,
@@ -83,7 +71,7 @@ offset_datetime(
 
 #### CT Step 2: Merge EXIFs ####
 ## Uncomment and fill in path before running
-# path_exif_folder <- "Z:/path/to/folder/containing/exif_csvs"
+path_exif_folder <- "C:/Users/joejyn/OneDrive/Camphora/Projects/CR202_Obayashi/EngNeo/Data/CT"
 
 merging_exifs(
   path_exif_folder      = path_exif_folder,
@@ -94,7 +82,7 @@ merging_exifs(
 
 #### CT Step 3: Independent Detections ####
 ## Uncomment and fill in path before running
-# input_ct_file <- "Z:/path/to/combined_exif_all.csv"
+input_ct_file <- "C:/Users/joejyn/OneDrive/Camphora/Projects/CR202_Obayashi/EngNeo/Data/CT/combined_exif_all.csv"
 
 indp_dets(
   input_ct_file         = input_ct_file,
@@ -191,9 +179,9 @@ stream_report(
 
 #### Bat Recording: Step 1 Process Meta ####
 ## Uncomment and fill in paths before running
-# bat_meta_file <- "Z:/path/to/meta.csv"
-# bat_gps_file  <- "Z:/path/to/tracks.csv"   # set to NA to skip GPS matching
-# bat_wav_dir   <- "Z:/path/to/wav_folder"   # set to NA to skip sorting
+bat_meta_file <- "F:/Shared drives/01_Current_Projects_A-D/CR202 EMMP_Obayashi/10_Bat_Recordings/02_Processed/Eng Neo/20260303/meta.csv"
+bat_gps_file  <- "F:/Shared drives/01_Current_Projects_A-D/CR202 EMMP_Obayashi/10_Bat_Recordings/02_Processed/Eng Neo/20260303/tracks.csv"   # set to NA to skip GPS matching
+bat_wav_dir   <- NA   # set to NA to skip sorting
 
 process_bat_meta(
   meta_file         = bat_meta_file,
@@ -207,7 +195,7 @@ process_bat_meta(
 
 #### Bat Recording: Step 2 Combine Meta ####
 ## Uncomment and fill in path before running
-# bat_meta_folder <- "Z:/path/to/folder/of/cleaned_or_matched_csvs"
+bat_meta_folder <- "C:/Users/Joejyn/OneDrive/Camphora/Projects/CR202_Obayashi/EngNeo/Data/Bat Recordings/"
 
 combine_bat_meta(
   meta_folder = bat_meta_folder,
@@ -237,4 +225,32 @@ recover_bat_meta(
   path_processed = bat_proc_dir,
   path_raw       = bat_raw_dir2,
   output_dir     = bat_proc_dir
+)
+
+
+#### Flora Photo Filing: Sort Photos ####
+## Uncomment and fill in paths before running
+# flora_datasheet_path <- "Z:/path/to/BTNR_Master data_v106_JM.xlsx"
+# flora_photos_dir     <- "Z:/path/to/BTNR_Interim Report 3_Photos"
+# flora_sorted_dir     <- "Z:/path/to/Flora_and_Arboriculture_Batch3.2"
+
+flora_status_to_sort <- c("Batch 3.1", "Batch 3.2")
+
+sort_flora_photos(
+  datasheet_path = flora_datasheet_path,
+  photos_dir     = flora_photos_dir,
+  sorted_dir     = flora_sorted_dir,
+  status_to_sort = flora_status_to_sort,
+  sheet_name     = "Photo Filing (For JO)"
+)
+
+
+#### Flora Photo Filing: Re-sort Tag Folders ####
+## Uncomment and fill in paths before running
+# flora_resort_src_dir  <- "Z:/path/to/Flora_and_Arboriculture_Batch2.1"
+# flora_resort_dest_dir <- "Z:/path/to/Flora_and_Arboriculture_Batch2.1_Updated"
+
+resort_flora_tag_dirs(
+  sorted_dir  = flora_resort_src_dir,
+  updated_dir = flora_resort_dest_dir
 )

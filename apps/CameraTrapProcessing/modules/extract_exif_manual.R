@@ -1,6 +1,5 @@
-## This script contains functions required for extracting information when 
-## using the manual method of sorting images (copy and pasting videos into the 
-## respective species folders). 
+## This script contains functions required for extracting information when using the manual method 
+## of sorting images (copy and pasting videos into the respective species folders). 
 
 
 read_video_paths <- function(dir_path){

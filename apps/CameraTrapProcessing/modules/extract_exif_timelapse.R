@@ -1,5 +1,4 @@
-## This script contains functions required for extracting information when 
-## using Timelapse to sort images. 
+## This script contains functions required for extracting information when using Timelapse. 
 
 
 read_ddb_datatable <- function(ddb_path){
