@@ -5,7 +5,7 @@
 # the browser.
 
 required <- c(
-  "shiny", "shinyFiles", "fs", "bslib", "bsicons",
+  "shiny", "shinyFiles", "fs", "bslib", "bsicons", "curl",
   "tidyverse", "openxlsx", "tools",
   "exifr", "zip", "batch", "vegan", "RSQLite", "parallel", "camtrapR",
   "rlang", "knitr", "rmarkdown", "magick", "pbapply"
@@ -20,8 +20,24 @@ if (length(missing)) install.packages(missing)
 #    RStudio bundles its own Pandoc; running this launcher outside RStudio may need Pandoc 
 #    installed separately (https://pandoc.org/installing.html).
 
-shiny::runGitHub(
-  repo     = "CamphoraToolkit",
-  username = "JoejynWan",
-  ref      = "HEAD" # always runs the latest on the default branch
-)
+# ── Fetch and run the latest app ──────────────────────────────────────────────────────────────────
+# This does by hand what shiny::runGitHub() does. runGitHub() downloads via download.file(), which
+# RStudio replaces with its own downloader; on Windows that combination fails to reach GitHub.
+# curl::curl_download() is not intercepted, so it works on every platform, in and out of RStudio.
+url     <- "https://github.com/JoejynWan/CamphoraToolkit/archive/HEAD.tar.gz" # HEAD = latest commit
+tarball <- tempfile("CamphoraToolkit", fileext = ".tar.gz")
+unpacked <- tempfile("CamphoraToolkit")
+dir.create(unpacked, showWarnings = FALSE)
+
+message("Downloading ", url)
+curl::curl_download(url, tarball, mode = "wb")
+
+top <- utils::untar(tarball, list = TRUE)[1] # e.g. "CamphoraToolkit-main/"
+utils::untar(tarball, exdir = unpacked)
+
+appdir <- file.path(unpacked, top)
+if (!utils::file_test("-d", appdir)) appdir <- dirname(appdir)
+
+shiny::runApp(appdir)
+
+unlink(c(tarball, unpacked), recursive = TRUE)
