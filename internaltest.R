@@ -28,6 +28,7 @@ source("apps/BatRecordingProcessing/recover_meta.R")
 source("apps/FloraPhotoFiling/modules/utils.R")
 source("apps/FloraPhotoFiling/sort_photos.R")
 source("apps/FloraPhotoFiling/resort_tag_dirs.R")
+source("apps/CAGPhotoRenaming/rename_photos.R")
 
 install_load_packages(c(
   "shiny", "shinyFiles", "fs", "bslib", "bsicons",
@@ -46,8 +47,8 @@ BAT_SPECIES_DB_PATH <- "apps/BatRecordingProcessing/data/Species_Database_Bats.c
 
 #### CT Step 1: EXIF Extraction ####
 ## Uncomment and fill in paths before running
-path_processed <- "G:/Shared drives/01_Current_Projects_A-D/CR202 EMMP_Obayashi/02_Camera_Trapping/Camera_Trap_Data/02 Processed/Eng Neo Forest Monitoring/38 - June 2026/"
-path_raw       <- "G:/Shared drives/01_Current_Projects_A-D/CR202 EMMP_Obayashi/02_Camera_Trapping/Camera_Trap_Data/01 Raw/Eng Neo Forest Monitoring/38 - June 2026/"
+path_processed <- "G:/Shared drives/01_Current_Projects_A-D/CR205 EMMP_CCCC/02_Camera_Trapping/Camera_Trap_Data/02 Processed/Forest Monitoring/20260713/"
+path_raw       <- "G:/Shared drives/01_Current_Projects_A-D/CR205 EMMP_CCCC/02_Camera_Trapping/Camera_Trap_Data/01 Raw/Forest Monitoring/20260713/"
 
 extract_exif(
   path_processed        = path_processed,
@@ -253,4 +254,22 @@ sort_flora_photos(
 resort_flora_tag_dirs(
   sorted_dir  = flora_resort_src_dir,
   updated_dir = flora_resort_dest_dir
+)
+
+
+#### CAG Photo Renaming ####
+## Uncomment and fill in paths before running
+# cag_excel_path <- "C:/Users/joejyn/Downloads/CAG 14.xlsx"
+# cag_photo_dir  <- "C:/Users/joejyn/Downloads/OneDrive_2026-07-23/Picture 2026 07 08/"
+
+cag_sheet <- "T1 20260708"
+cag_mode  <- "dry_run"   # "dry_run" -> preview only | "copy" -> safe | "rename" -> in place
+
+rename_photos_from_excel(
+  excel_path = cag_excel_path,
+  sheet      = cag_sheet,
+  photo_dir  = cag_photo_dir,
+  mode       = cag_mode,
+  id_col     = "Tree ID",
+  photo_col  = "Photo"
 )

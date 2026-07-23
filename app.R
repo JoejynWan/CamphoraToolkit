@@ -53,13 +53,14 @@ source("apps/BatRecordingProcessing/recover_meta.R")
 source("apps/FloraPhotoFiling/modules/utils.R")
 source("apps/FloraPhotoFiling/sort_photos.R")
 source("apps/FloraPhotoFiling/resort_tag_dirs.R")
+source("apps/CAGPhotoRenaming/rename_photos.R")
 
 SPECIES_DB_PATH     <- "apps/CameraTrapProcessing/data/Species_Database.xlsx"
 IA_MATRIX_PATH      <- "apps/ImpactAssessment/data/ConsequenceSignificanceMatrix.xlsx"
 ARBO_RMD_PATH       <- "apps/ArboReport/modules/arboreport_full.Rmd"
 BAT_SPECIES_DB_PATH <- "apps/BatRecordingProcessing/data/Species_Database_Bats.csv"
-VERSION         <- "v2.6"
-UPDATE_DATE     <- "2026-07-17"
+VERSION         <- "v2.7"
+UPDATE_DATE     <- "2026-07-23"
 
 
 # ── Project Registry ──────────────────────────────────────────────────────────────────────────────
@@ -163,12 +164,12 @@ PROJECTS <- list(
     title       = "CAG Photo Renaming",
     description = "Renames flora/arbo photos based on Tree ID in an excel datasheet.",
     url         = NULL,
-    nav_target  = NULL,
-    icon        = "images",
+    nav_target  = "flora_rename",
+    icon        = "pencil-square",
     category    = "Flora",
-    status      = "coming soon",
+    status      = "beta",
     version     = "v1.0",
-    updated     = "2026-07-17"
+    updated     = "2026-07-23"
   )
 
   ## ── Paste new entries above this line ──────────────────────────────────────────────────────────
@@ -1278,6 +1279,81 @@ ui <- page_navbar(
                div(style = "overflow-x: auto;", tableOutput("flora_resort_preview_table")))
         )
       )
+    ),
+
+    # Rename Photos (CAG)
+    nav_panel(
+      title = icon_text("Rename Photos", "pencil-square"),
+      value = "flora_rename",
+
+      layout_sidebar(
+        fillable = TRUE,
+        sidebar = sidebar(
+          width = 340,
+
+          h5("Input file", class = "fw-bold mt-1"),
+          fileInput("cag_excel_file",
+                    label = tooltip(
+                      span("Datasheet (.xlsx)", bsicons::bs_icon("info-circle")),
+                      "Workbook holding the Tree ID <-> Photo-number mapping, e.g. CAG_14.xlsx."
+                    ),
+                    accept = ".xlsx", multiple = FALSE),
+
+          textInput("cag_sheet",
+                    label = tooltip(
+                      span("Sheet name", bsicons::bs_icon("info-circle")),
+                      "Name of the sheet holding the mapping table, e.g. T1 20260708."
+                    ),
+                    placeholder = "e.g. T1 20260708"),
+
+          hr(),
+          h5("Photos folder", class = "fw-bold mt-1"),
+          p(class = "mb-1",
+            tooltip(span("Photo folder", bsicons::bs_icon("info-circle")),
+                    "Folder holding the photos to rename. Copy mode writes to a 'renamed' subfolder; Rename mode renames in place.")),
+          shinyDirButton("cag_photo_dir", label = "Browse...",
+                         title = "Choose photo directory",
+                         class = "btn-outline-secondary w-100 mb-1"),
+          verbatimTextOutput("cag_photo_dir_display", placeholder = TRUE),
+
+          hr(),
+          h5("Columns", class = "fw-bold mt-1"),
+          textInput("cag_id_col",
+                    label = tooltip(
+                      span("Tree ID column", bsicons::bs_icon("info-circle")),
+                      "Column holding the new name for each photo. Matched ignoring case and spaces."
+                    ),
+                    value = "Tree ID"),
+          textInput("cag_photo_col",
+                    label = tooltip(
+                      span("Photo column", bsicons::bs_icon("info-circle")),
+                      "Column holding the photo numbers, e.g. 9105-07, 9198-9201, 9230."
+                    ),
+                    value = "Photo"),
+
+          hr(),
+          h5("Mode", class = "fw-bold mt-1"),
+          radioButtons("cag_mode",
+                       label = NULL,
+                       choices = c("Preview only (no changes)" = "dry_run",
+                                   "Copy into 'renamed' subfolder" = "copy",
+                                   "Rename in place" = "rename"),
+                       selected = "dry_run"),
+
+          hr(),
+          actionButton("cag_run_btn",
+                       label = tagList(bsicons::bs_icon("play-fill"), " Run"),
+                       class = "btn-primary w-100")
+        ),
+
+        layout_column_wrap(
+          width = 1,
+          card(card_header(tagList(bsicons::bs_icon("terminal"), " Log")),
+               verbatimTextOutput("cag_log_output"), height = 220),
+          card(card_header(tagList(bsicons::bs_icon("table"), " Rename plan (first 50 rows)")),
+               div(style = "overflow-x: auto;", tableOutput("cag_preview_table")))
+        )
+      )
     )
   ),
 
@@ -1627,6 +1703,53 @@ ui <- page_navbar(
             )
           )
         )
+      ),
+
+      accordion_panel(
+        value = "about_cag",
+        title = about_panel_title("CAG Photo Renaming", "flora_rename", "pencil-square"),
+
+        layout_column_wrap(
+          width = 1 / 2,
+
+          card(
+            card_header("Rename Photos"),
+            card_body(
+              p("Renames CAG field photos using a ", strong("Tree ID"), " to ", strong("Photo-number"), " mapping held in an Excel sheet. Each tree's photos are named ", code("<TreeID>_01"), ", ", code("<TreeID>_02"), ", and so on, matched by the trailing number in each file (e.g. ", code("IMG_9380.jpg"), " -> ", code("P342_01.jpg"), ")."),
+              tags$ol(
+                tags$li("Upload the ", strong("datasheet"), " (.xlsx) and enter the ", strong("sheet name"), ", e.g. ", code("T1 20260708"), "."),
+                tags$li("Select the ", strong("photo folder"), " holding the files to rename."),
+                tags$li("Confirm the ", strong("Tree ID"), " and ", strong("Photo"), " column names (defaults ", code("Tree ID"), " and ", code("Photo"), ")."),
+                tags$li("Choose a ", strong("mode"), " and click ", strong("Run"), ".")
+              ),
+              hr(),
+              p(strong("Photo column formats:")),
+              tags$ul(
+                tags$li(code("9230"), " — a single photo."),
+                tags$li(code("9105-07"), ", ", code("9108-110"), ", ", code("9198-9201"), " — ranges, with abbreviated ends filled in."),
+                tags$li(code("9230-32, 9240"), " — several comma/semicolon-separated tokens.")
+              )
+            )
+          ),
+
+          card(
+            card_header("Modes & output"),
+            card_body(
+              p(strong("Modes:")),
+              tags$ul(
+                tags$li(strong("Preview only"), " — writes nothing; shows the full rename plan so you can check it first."),
+                tags$li(strong("Copy"), " — copies renamed photos into a ", code("renamed"), " subfolder, leaving the originals untouched."),
+                tags$li(strong("Rename in place"), " — renames the originals directly (two-phase, so a new name never overwrites a file still waiting to be renamed).")
+              ),
+              hr(),
+              p(strong("Output:")),
+              tags$ul(
+                tags$li("The rename plan is shown below the log, with a ", code("status"), " column flagging ", code("MISSING_FILE"), " and ", code("NAME_CLASH"), " rows that are skipped."),
+                tags$li("Copy and Rename modes also write a timestamped ", code("rename_log_*.csv"), " audit trail into the photo folder.")
+              )
+            )
+          )
+        )
       )
     ),
 
@@ -1668,6 +1791,7 @@ server <- function(input, output, session) {
   shinyDirChoose(input, "flora_sorted_dir",      roots = volumes, session = session)
   shinyDirChoose(input, "flora_resort_src_dir",  roots = volumes, session = session)
   shinyDirChoose(input, "flora_resort_dest_dir", roots = volumes, session = session)
+  shinyDirChoose(input, "cag_photo_dir",         roots = volumes, session = session)
 
 
   # ── Hub: filter bar + card grid + in-app navigation ─────────────────────────────────────────────
@@ -2885,6 +3009,75 @@ server <- function(input, output, session) {
   output$flora_resort_preview_table <- renderTable({
     req(flora_resort_rv$preview_data)
     head(flora_resort_rv$preview_data, 50)
+  }, striped = TRUE, hover = TRUE, bordered = TRUE, na = "")
+
+
+  # ── CAG Photo Renaming ──────────────────────────────────────────────────────────────────────────
+  cag_rv <- reactiveValues(
+    log_lines    = character(0),
+    preview_data = NULL
+  )
+  cag_log <- make_logger(cag_rv)
+
+  cag_photo_dir_path <- reactive({
+    req(input$cag_photo_dir)
+    parseDirPath(volumes, input$cag_photo_dir)
+  })
+
+  output$cag_photo_dir_display <- renderText({
+    d <- tryCatch(cag_photo_dir_path(), error = function(e) "")
+    if (length(d) == 0 || d == "") "No folder selected." else d
+  })
+
+  observeEvent(input$cag_run_btn, {
+
+    cag_rv$log_lines    <- character(0)
+    cag_rv$preview_data <- NULL
+
+    photo_dir <- tryCatch(cag_photo_dir_path(), error = function(e) "")
+
+    if (is.null(input$cag_excel_file))               { cag_log("ERROR: No datasheet uploaded."); return() }
+    if (trimws(input$cag_sheet) == "")               { cag_log("ERROR: Please enter the sheet name."); return() }
+    if (length(photo_dir) == 0 || photo_dir == "")   { cag_log("ERROR: Please select a photo folder."); return() }
+    if (trimws(input$cag_id_col) == "")              { cag_log("ERROR: Please enter the Tree ID column name."); return() }
+    if (trimws(input$cag_photo_col) == "")           { cag_log("ERROR: Please enter the Photo column name."); return() }
+
+    withProgress(message = "Renaming photos...", value = 0.3, {
+      tryCatch({
+
+        plan <- rename_photos_from_excel(
+          excel_path = input$cag_excel_file$datapath,
+          sheet      = trimws(input$cag_sheet),
+          photo_dir  = photo_dir,
+          mode       = input$cag_mode,
+          id_col     = trimws(input$cag_id_col),
+          photo_col  = trimws(input$cag_photo_col),
+          log        = cag_log
+        )
+
+        incProgress(0.6)
+
+        cag_rv$preview_data <- plan[, c("tree_id", "photo_no", "file", "new_name", "status")]
+
+        if (input$cag_mode == "dry_run") {
+          cag_log("Done! This was a preview — re-run as Copy or Rename to apply.")
+        } else {
+          cag_log("Done! See the plan below for the status of each photo.")
+        }
+
+      }, error = function(e) cag_log(paste("ERROR:", conditionMessage(e))))
+    })
+  })
+
+  output$cag_log_output <- renderText({
+    if (length(cag_rv$log_lines) == 0)
+      "No output yet. Fill in the inputs and click Run."
+    else paste(cag_rv$log_lines, collapse = "\n")
+  })
+
+  output$cag_preview_table <- renderTable({
+    req(cag_rv$preview_data)
+    head(cag_rv$preview_data, 50)
   }, striped = TRUE, hover = TRUE, bordered = TRUE, na = "")
 }
 
