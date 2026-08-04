@@ -1,8 +1,8 @@
 ## app.R
 ## Camphora Toolkit Hub — unified Shiny front-end.
-## Integrates Camera Trap Processing, Abiotic Monitoring, Fauna Impact Assessment, Arbo Report,
-## Stream Inspection, Bat Recording Processing, and Flora Photo Filing alongside the project
-## directory hub.
+## Integrates Camera Trap Processing, Abiotic Monitoring, Light Monitoring, Fauna Impact
+## Assessment, Arbo Report, Stream Inspection, Bat Recording Processing, and Flora Photo Filing
+## alongside the project directory hub.
 ##
 ## Runs locally via launcher: shiny::runGitHub("CamphoraToolkit", "JoejynWan")
 ## Or directly:               shiny::runApp(".")
@@ -36,6 +36,8 @@ source("apps/CameraTrapProcessing/CT_Step2_MergeExifs.R")
 source("apps/CameraTrapProcessing/CT_Step3_IndpDets.R")
 source("apps/AbioticMonitoring/water_report.R")
 source("apps/AbioticMonitoring/noise_report.R")
+source("apps/LightR/modules/utils.R")
+source("apps/LightR/process_light.R")
 source("apps/ImpactAssessment/modules/utils.R")
 source("apps/ImpactAssessment/impact_assessment.R")
 source("apps/ArboReport/modules/utils.R")
@@ -59,8 +61,8 @@ SPECIES_DB_PATH     <- "apps/CameraTrapProcessing/data/Species_Database.xlsx"
 IA_MATRIX_PATH      <- "apps/ImpactAssessment/data/ConsequenceSignificanceMatrix.xlsx"
 ARBO_RMD_PATH       <- "apps/ArboReport/modules/arboreport_full.Rmd"
 BAT_SPECIES_DB_PATH <- "apps/BatRecordingProcessing/data/Species_Database_Bats.csv"
-VERSION         <- "v2.7"
-UPDATE_DATE     <- "2026-07-23"
+VERSION         <- "v2.8"
+UPDATE_DATE     <- "2026-08-04"
 
 
 # ── Project Registry ──────────────────────────────────────────────────────────────────────────────
@@ -170,6 +172,19 @@ PROJECTS <- list(
     status      = "beta",
     version     = "v1.0",
     updated     = "2026-07-23"
+  ),
+
+  list(
+    title       = "Light Monitoring",
+    description = "Summarises baseline light levels from logger exports and flags
+                   monitoring hours that exceed them.",
+    url         = NULL,
+    nav_target  = "light",
+    icon        = "brightness-high",
+    category    = "Abiotic",
+    status      = "beta",
+    version     = "v1.0",
+    updated     = "2026-08-04"
   )
 
   ## ── Paste new entries above this line ──────────────────────────────────────────────────────────
@@ -759,6 +774,87 @@ ui <- page_navbar(
                verbatimTextOutput("noise_log_output"), height = 200),
           card(card_header(tagList(bsicons::bs_icon("table"), " Output preview — Noise Data (first 50 rows)")),
                div(style = "overflow-x: auto;", tableOutput("noise_preview_table")))
+        )
+      )
+    ),
+
+    # Light Monitoring
+    nav_panel(
+      title = icon_text("Light Monitoring", "brightness-high"),
+      value = "light",
+
+      layout_sidebar(
+        fillable = TRUE,
+        sidebar = sidebar(
+          width = 340,
+
+          h5("Input folders", class = "fw-bold mt-1"),
+
+          p(class = "mb-1",
+            tooltip(span("Baseline folder", bsicons::bs_icon("info-circle")),
+                    "Folder of baseline phase logger exports (.xlsx), searched recursively. The station name is read from the start of each file name, e.g. 'L2 2026-07-02 ... .xlsx' gives station L2.")),
+          shinyDirButton("light_baseline_dir", label = "Browse...",
+                         title = "Choose baseline data directory",
+                         class = "btn-outline-secondary w-100 mb-1"),
+          verbatimTextOutput("light_baseline_dir_display", placeholder = TRUE),
+
+          p(class = "mb-1 mt-2",
+            tooltip(span("Monitoring folder", bsicons::bs_icon("info-circle")),
+                    "Folder of monitoring phase logger exports (.xlsx), searched recursively. Station names must match those in the baseline folder.")),
+          shinyDirButton("light_monitoring_dir", label = "Browse...",
+                         title = "Choose monitoring data directory",
+                         class = "btn-outline-secondary w-100 mb-1"),
+          verbatimTextOutput("light_monitoring_dir_display", placeholder = TRUE),
+
+          hr(),
+          h5("Night window", class = "fw-bold mt-1"),
+
+          numericInput("light_time_from",
+                       label = tooltip(
+                         span("Start hour", bsicons::bs_icon("info-circle")),
+                         "Hour the night window starts, in 24-hour time. Default 18 (6pm)."
+                       ),
+                       value = 18, min = 0, max = 23, step = 1),
+
+          numericInput("light_time_to",
+                       label = tooltip(
+                         span("End hour", bsicons::bs_icon("info-circle")),
+                         "Hour the night window ends, in 24-hour time. Default 7 (7am). Must be earlier than the start hour — the window always crosses midnight."
+                       ),
+                       value = 7, min = 0, max = 23, step = 1),
+
+          hr(),
+          textAreaInput("light_excl_dates",
+                        label = tooltip(
+                          span("Baseline dates to exclude (optional)", bsicons::bs_icon("info-circle")),
+                          "One date per line or comma-separated, YYYY-MM-DD. Use to drop baseline nights affected by works or weather."
+                        ),
+                        placeholder = "e.g.\n2026-06-14\n2026-06-15", rows = 3),
+
+          hr(),
+          actionButton("light_run_btn",
+                       label = tagList(bsicons::bs_icon("play-fill"), " Run Report"),
+                       class = "btn-primary w-100"),
+          hr(),
+          uiOutput("light_download_ui")
+        ),
+
+        layout_column_wrap(
+          width = 1,
+          card(card_header(tagList(bsicons::bs_icon("terminal"), " Log")),
+               verbatimTextOutput("light_log_output"), height = 220),
+
+          navset_card_tab(
+            title = tagList(bsicons::bs_icon("graph-up"), " Plots"),
+            height = 520,
+            nav_panel("Baseline: daily",    plotOutput("light_plot_baseline_daily")),
+            nav_panel("Baseline: hourly",   plotOutput("light_plot_baseline_hourly")),
+            nav_panel("Baseline: station",  plotOutput("light_plot_baseline_station")),
+            nav_panel("Monitoring: daily",  plotOutput("light_plot_monitoring_daily"))
+          ),
+
+          card(card_header(tagList(bsicons::bs_icon("table"), " Baseline light levels per station")),
+               div(style = "overflow-x: auto;", tableOutput("light_preview_table")))
         )
       )
     )
@@ -1522,6 +1618,54 @@ ui <- page_navbar(
       ),
 
       accordion_panel(
+        value = "about_light",
+        title = about_panel_title("Light Monitoring", "light", "brightness-high"),
+
+        layout_column_wrap(
+          width = 1 / 2,
+
+          card(
+            card_header("Light Monitoring"),
+            card_body(
+              p("Establishes the baseline night-time light level at each station, then flags every monitoring hour that exceeds it."),
+              tags$ol(
+                tags$li("Select the ", strong("baseline folder"), " — logger exports (.xlsx) from the baseline period, searched recursively."),
+                tags$li("Select the ", strong("monitoring folder"), " — exports from the monitoring round."),
+                tags$li("Set the ", strong("night window"), " (default 18:00-07:00). It always crosses midnight, so the start hour must be later than the end hour."),
+                tags$li("Optionally list ", strong("baseline dates to exclude"), ", e.g. nights affected by works or weather."),
+                tags$li("Click ", strong("Run Report"), " and download the zipped outputs.")
+              ),
+              hr(),
+              p(class = "mb-0",
+                strong("Station names "), "are read from the start of each file name, up to the first space or underscore — e.g. ", code("L2 2026-07-02 09_51_33 SGT (Data SGT).xlsx"), " gives station ", code("L2"), ". Baseline and monitoring files must use the same station names.")
+            )
+          ),
+
+          card(
+            card_header("Outputs"),
+            card_body(
+              p(strong("CSVs:")),
+              tags$ul(
+                tags$li(code("light_baseline_values.csv"), " — baseline mean, SD and +/- 1 SD bounds per station."),
+                tags$li(code("light_monitoring_results.csv"), " — one row per station/date/hour with the baseline, the measured mean, and ", code("Exceed_Mean"), " / ", code("Exceed_UB"), " flags.")
+              ),
+              hr(),
+              p(strong("Plots (.png):")),
+              tags$ul(
+                tags$li("Daily baseline light levels per station — use this to check which hours are stable."),
+                tags$li("Baseline light levels at each hour, pooled across the baseline period."),
+                tags$li("Baseline light level per station across the whole window."),
+                tags$li("Monitoring nights plotted against the baseline (black line).")
+              ),
+              hr(),
+              p(class = "mb-0",
+                "The log ends with a summary of how many hours exceeded the baseline mean and its upper bound.")
+            )
+          )
+        )
+      ),
+
+      accordion_panel(
         value = "about_arbo",
         title = about_panel_title("Arbo Report", "arbo_report", "tree"),
 
@@ -1778,6 +1922,8 @@ server <- function(input, output, session) {
   shinyDirChoose(input, "s1_path_processed",     roots = volumes, session = session)
   shinyDirChoose(input, "s1_path_raw",           roots = volumes, session = session)
   shinyDirChoose(input, "s2_exif_folder",        roots = volumes, session = session)
+  shinyDirChoose(input, "light_baseline_dir",    roots = volumes, session = session)
+  shinyDirChoose(input, "light_monitoring_dir",  roots = volumes, session = session)
   shinyDirChoose(input, "arbo_photos_dir",       roots = volumes, session = session)
   shinyDirChoose(input, "arbophoto_source_dir",  roots = volumes, session = session)
   shinyDirChoose(input, "arbophoto_dest_dir",    roots = volumes, session = session)
@@ -2339,6 +2485,123 @@ server <- function(input, output, session) {
     filename = function() paste0("NoiseReport_", trimws(input$noise_location), "_",
                                  trimws(input$noise_monitoring_pt), ".xlsx"),
     content  = function(file) { req(noise_rv$output_path); file.copy(noise_rv$output_path, file) }
+  )
+
+
+  # ── Abiotic: Light Monitoring ───────────────────────────────────────────────────────────────────
+  light_baseline_dir_sel <- reactive({
+    req(input$light_baseline_dir)
+    parseDirPath(volumes, input$light_baseline_dir)
+  })
+
+  light_monitoring_dir_sel <- reactive({
+    req(input$light_monitoring_dir)
+    parseDirPath(volumes, input$light_monitoring_dir)
+  })
+
+  output$light_baseline_dir_display <- renderText({
+    d <- tryCatch(light_baseline_dir_sel(), error = function(e) "")
+    if (length(d) == 0 || d == "") "No folder selected." else d
+  })
+
+  output$light_monitoring_dir_display <- renderText({
+    d <- tryCatch(light_monitoring_dir_sel(), error = function(e) "")
+    if (length(d) == 0 || d == "") "No folder selected." else d
+  })
+
+  light_rv <- reactiveValues(
+    log_lines    = character(0),
+    zip_path     = NULL,
+    plots        = NULL,
+    preview_data = NULL
+  )
+  light_log <- make_logger(light_rv)
+
+  observeEvent(input$light_run_btn, {
+    light_rv$log_lines    <- character(0)
+    light_rv$zip_path     <- NULL
+    light_rv$plots        <- NULL
+    light_rv$preview_data <- NULL
+
+    baseline_dir   <- tryCatch(light_baseline_dir_sel(),   error = function(e) "")
+    monitoring_dir <- tryCatch(light_monitoring_dir_sel(), error = function(e) "")
+
+    if (length(baseline_dir)   == 0 || baseline_dir   == "") { light_log("ERROR: Please select the baseline folder.");   return() }
+    if (length(monitoring_dir) == 0 || monitoring_dir == "") { light_log("ERROR: Please select the monitoring folder."); return() }
+
+    time_from <- input$light_time_from
+    time_to   <- input$light_time_to
+    if (is.na(time_from) || is.na(time_to)) { light_log("ERROR: Please enter both night window hours."); return() }
+    if (time_from <= time_to) {
+      light_log("ERROR: The night window must cross midnight — the start hour must be later than the end hour.")
+      return()
+    }
+
+    excl_raw   <- trimws(unlist(strsplit(input$light_excl_dates, "[,\n]")))
+    excl_dates <- excl_raw[nchar(excl_raw) > 0]
+    bad_dates  <- excl_dates[is.na(suppressWarnings(as.Date(excl_dates, format = "%Y-%m-%d")))]
+    if (length(bad_dates) > 0) {
+      light_log(paste("ERROR: Excluded dates must be YYYY-MM-DD. Could not read:",
+                      paste(bad_dates, collapse = ", ")))
+      return()
+    }
+    if (length(excl_dates) == 0) excl_dates <- NULL
+
+    out_dir <- file.path(tempdir(), paste0("light_report_", as.integer(Sys.time())))
+
+    withProgress(message = "Processing light data...", value = 0, {
+      tryCatch({
+        incProgress(0.1)
+        result <- run_light_report(
+          path_baseline   = baseline_dir,
+          path_monitoring = monitoring_dir,
+          output_dir      = out_dir,
+          time_from       = time_from,
+          time_to         = time_to,
+          excl_dates      = excl_dates,
+          log             = light_log
+        )
+        incProgress(0.7)
+
+        light_rv$plots        <- result$plots
+        light_rv$preview_data <- result$baseline_values
+
+        zip_path <- file.path(tempdir(), "light_monitoring_outputs.zip")
+        if (file.exists(zip_path)) unlink(zip_path)
+        zip::zip(zip_path, files = c(result$csv_paths, result$plot_paths), mode = "cherry-pick")
+        light_rv$zip_path <- zip_path
+        incProgress(0.2)
+        light_log("Outputs zipped. Click 'Download' to save.")
+
+      }, error = function(e) light_log(paste("ERROR:", conditionMessage(e))))
+    })
+  })
+
+  output$light_log_output <- renderText({
+    if (length(light_rv$log_lines) == 0) "No output yet. Select both folders and click Run Report."
+    else paste(light_rv$log_lines, collapse = "\n")
+  })
+
+  output$light_plot_baseline_daily   <- renderPlot({ req(light_rv$plots); light_rv$plots$baseline_daily })
+  output$light_plot_baseline_hourly  <- renderPlot({ req(light_rv$plots); light_rv$plots$baseline_hourly })
+  output$light_plot_baseline_station <- renderPlot({ req(light_rv$plots); light_rv$plots$baseline_station })
+  output$light_plot_monitoring_daily <- renderPlot({ req(light_rv$plots); light_rv$plots$monitoring_daily })
+
+  output$light_preview_table <- renderTable({
+    req(light_rv$preview_data)
+    head(light_rv$preview_data, 50)
+  }, striped = TRUE, hover = TRUE, bordered = TRUE, na = "")
+
+  output$light_download_ui <- renderUI({
+    req(light_rv$zip_path)
+    downloadButton("light_download_btn",
+                   label = tagList(bsicons::bs_icon("download"), " Download outputs (.zip)"),
+                   class = "btn-success w-100")
+  })
+
+  output$light_download_btn <- downloadHandler(
+    filename = function() paste0("LightMonitoring_", format(Sys.Date(), "%Y%m%d"), ".zip"),
+    content  = function(file) { req(light_rv$zip_path); file.copy(light_rv$zip_path, file) }
   )
 
 

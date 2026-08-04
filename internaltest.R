@@ -11,6 +11,8 @@ source("apps/CameraTrapProcessing/CT_Step2_MergeExifs.R")
 source("apps/CameraTrapProcessing/CT_Step3_IndpDets.R")
 source("apps/AbioticMonitoring/water_report.R")
 source("apps/AbioticMonitoring/noise_report.R")
+source("apps/LightR/modules/utils.R")
+source("apps/LightR/process_light.R")
 source("apps/ImpactAssessment/modules/utils.R")
 source("apps/ImpactAssessment/impact_assessment.R")
 source("apps/ArboReport/modules/utils.R")
@@ -47,8 +49,8 @@ BAT_SPECIES_DB_PATH <- "apps/BatRecordingProcessing/data/Species_Database_Bats.c
 
 #### CT Step 1: EXIF Extraction ####
 ## Uncomment and fill in paths before running
-path_processed <- "G:/Shared drives/01_Current_Projects_A-D/CR205 EMMP_CCCC/02_Camera_Trapping/Camera_Trap_Data/02 Processed/Forest Monitoring/20260713/"
-path_raw       <- "G:/Shared drives/01_Current_Projects_A-D/CR205 EMMP_CCCC/02_Camera_Trapping/Camera_Trap_Data/01 Raw/Forest Monitoring/20260713/"
+path_processed <- "G:/Shared drives/01_Current_Projects_A-D/CR202 EMMP_Obayashi/02_Camera_Trapping/Camera_Trap_Data/02 Processed/Windsor Forest Monitoring/2026/20260618/"
+path_raw       <- "G:/Shared drives/01_Current_Projects_A-D/CR202 EMMP_Obayashi/02_Camera_Trapping/Camera_Trap_Data/01 Raw/Windsor Forest Monitoring/2026/20260618/"
 
 extract_exif(
   path_processed        = path_processed,
@@ -112,6 +114,30 @@ location      <- "Site Name"
 monitoring_pt <- "N1"
 
 noise_report(location, monitoring_pt, path_noise, path_calibration)
+
+
+#### Abiotic: Light Monitoring ####
+## Uncomment and fill in paths before running
+# light_baseline_dir   <- "G:/Shared drives/01_Current_Projects_S-Z/WCP EMMP ext infra/11_Light monitoring/Data/Baseline/"
+# light_monitoring_dir <- "G:/Shared drives/01_Current_Projects_S-Z/WCP EMMP ext infra/11_Light monitoring/Data/202607 Monitoring 01/"
+
+## Night window, 24-hour time. Always crosses midnight, so time_from must be later than time_to
+light_time_from  <- 18
+light_time_to    <- 7
+light_excl_dates <- NULL   # e.g. c("2026-06-14", "2026-06-15") to drop baseline nights
+
+light_result <- run_light_report(
+  path_baseline   = light_baseline_dir,
+  path_monitoring = light_monitoring_dir,
+  output_dir      = "apps/LightR/results",
+  time_from       = light_time_from,
+  time_to         = light_time_to,
+  excl_dates      = light_excl_dates
+)
+
+## Plots are returned rather than printed, so app.R can render them — print to inspect locally
+print(light_result$plots$baseline_daily)
+print(light_result$plots$monitoring_daily)
 
 
 #### Fauna Impact Assessment ####
