@@ -63,7 +63,7 @@ ARBO_RMD_PATH       <- "apps/ArboReport/modules/arboreport_full.Rmd"
 BAT_SPECIES_DB_PATH <- "apps/BatRecordingProcessing/data/Species_Database_Bats.csv"
 VERSION         <- "v2.8"
 UPDATE_DATE     <- "2026-08-04"
-
+options(shiny.maxRequestSize = 30 * 1024^2)
 
 # ── Project Registry ──────────────────────────────────────────────────────────────────────────────
 # nav_target: value of a nav_panel in this app; NULL = external url or disabled. version/updated:
