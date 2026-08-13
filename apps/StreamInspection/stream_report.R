@@ -72,7 +72,13 @@ stream_report <- function(path_fauna_data, path_photos_dir, inspection_date,
                                   full.names = T, recursive = T))
   }
 
-  photo_data <- lapply(inspection_date, get_photo_paths) %>%
+  photo_data_raw <- lapply(inspection_date, get_photo_paths) 
+  
+  if (nrow(photo_data_raw) == 0){
+    log("WARNING: No photos found. Please ensure that your root photo folder does not include the inspection dates. ")
+  }
+  
+  photo_data <- photo_data_raw %>%
     bind_rows() %>%
     mutate(Dir = basename(dirname(Paths))) %>%
     separate(Dir, into = c("Transect", "Date"), sep = "_") %>%
@@ -97,7 +103,7 @@ stream_report <- function(path_fauna_data, path_photos_dir, inspection_date,
   rownames(table) <- c(head(rownames(table), -1), "Remarks")
 
   #### Build the workbook ####
-  log(paste("Building report with", nrow(photo_data), "photos across",
+  log(paste("Building report with", nrow(photo_data_raw), "photos across",
             length(unique(photo_data$Transect)), "sampling point(s)..."))
   wb <- createWorkbook()
   addWorksheet(wb, 1)

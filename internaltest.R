@@ -190,11 +190,11 @@ run_arbo_report(
 
 #### Stream Inspection Report ####
 ## Uncomment and fill in paths before running
-# si_path_fauna  <- "Z:/path/to/CR202 Fauna Monitoring Data.xlsx"
-# si_photos_dir  <- "Z:/path/to/Stream Inspection/Windsor"
+si_path_fauna  <- "G:/Shared drives/01_Current_Projects_A-D/CR202 EMMP_Obayashi/03_Data/Monthly fauna surveys/Eng Neo/CR202 Fauna Monitoring Data_20260811_HB.xlsx"
+si_photos_dir  <- "G:/Shared drives/01_Current_Projects_A-D/CR202 EMMP_Obayashi/07_Photos/Stream Inspection/Eng Neo"
 
 ## Inspection date(s), YYYY-MM-DD. Single: "2025-11-25"; multiple: c("2025-11-25", "2025-11-26")
-si_dates <- c("2025-11-25", "2025-11-26")
+si_dates <- c("2026-08-05")
 
 stream_report(
   path_fauna_data = si_path_fauna,
