@@ -72,14 +72,14 @@ stream_report <- function(path_fauna_data, path_photos_dir, inspection_date,
                                   full.names = T, recursive = T))
   }
 
-  photo_data_raw <- lapply(inspection_date, get_photo_paths) 
+  photo_data_raw <- lapply(inspection_date, get_photo_paths) %>%
+    bind_rows()
   
   if (nrow(photo_data_raw) == 0){
     log("WARNING: No photos found. Please ensure that your root photo folder does not include the inspection dates. ")
   }
   
   photo_data <- photo_data_raw %>%
-    bind_rows() %>%
     mutate(Dir = basename(dirname(Paths))) %>%
     separate(Dir, into = c("Transect", "Date"), sep = "_") %>%
     merge(aquatic, by = "Transect", all.x = T, all.y = T) %>%
