@@ -49,8 +49,8 @@ BAT_SPECIES_DB_PATH <- "apps/BatRecordingProcessing/data/Species_Database_Bats.c
 
 #### CT Step 1: EXIF Extraction ####
 ## Uncomment and fill in paths before running
-path_processed <- "G:/Shared drives/01_Current_Projects_A-D/CR202 EMMP_Obayashi/02_Camera_Trapping/Camera_Trap_Data/02 Processed/Windsor Forest Monitoring/2026/20260618/"
-path_raw       <- "G:/Shared drives/01_Current_Projects_A-D/CR202 EMMP_Obayashi/02_Camera_Trapping/Camera_Trap_Data/01 Raw/Windsor Forest Monitoring/2026/20260618/"
+path_processed <- "G:/Shared drives/01_Current_Projects_A-D/CR202 EMMP_Obayashi/02_Camera_Trapping/Camera_Trap_Data/02 Processed/Windsor Forest Monitoring/2026/20260715/"
+path_raw       <- "G:/Shared drives/01_Current_Projects_A-D/CR202 EMMP_Obayashi/02_Camera_Trapping/Camera_Trap_Data/01 Raw/Windsor Forest Monitoring/2026/20260715/"
 
 extract_exif(
   path_processed        = path_processed,
@@ -168,11 +168,11 @@ resize_arbo_photos(
 
 
 #### Arbo Report: Generate Report ####
-path_biodata <- "C:/Users/Joejyn/Downloads/Holland_Arbo_v0_1-20.csv"
+path_biodata <- "C:/Users/Joejyn/Downloads/PBI_Arbo_Site2and3.csv"
 
 ## [Optional] Set to NULL to generate the report without photos
-arbo_resized_photos_dir <- NULL
-arbo_photo_prefix <- "Holland Rd_Photos"
+arbo_resized_photos_dir <- "G:/Shared drives/01_Current_Projects_E-R/Punggol Barat EMMP_Obayashi/07_Photos/Flora_and_Arboriculture/Site 2 & 3/"
+arbo_photo_prefix <- "Punggol Barat_Photos"
 
 run_arbo_report(
   path_biodata        = path_biodata,
@@ -184,13 +184,13 @@ run_arbo_report(
   select_ids           = NULL,     # e.g. c("12", "15", "20A") to select specific trees
   incl_crown_spread    = FALSE,
   sort_site            = FALSE,
-  date_format          = "%d/%m/%Y"
+  date_format          = "%d/%m/%y"
 )
 
 
 #### Stream Inspection Report ####
 ## Uncomment and fill in paths before running
-si_path_fauna  <- "G:/Shared drives/01_Current_Projects_A-D/CR202 EMMP_Obayashi/03_Data/Monthly fauna surveys/Eng Neo/CR202 Fauna Monitoring Data_20260811_HB.xlsx"
+si_path_fauna  <- "G:/Shared drives/01_Current_Projects_A-D/CR202 EMMP_Obayashi/03_Data/Monthly fauna surveys/Eng Neo/CR202 Fauna Monitoring Data_20260814_VL.xlsx"
 si_photos_dir  <- "G:/Shared drives/01_Current_Projects_A-D/CR202 EMMP_Obayashi/07_Photos/Stream Inspection/Eng Neo"
 
 ## Inspection date(s), YYYY-MM-DD. Single: "2025-11-25"; multiple: c("2025-11-25", "2025-11-26")

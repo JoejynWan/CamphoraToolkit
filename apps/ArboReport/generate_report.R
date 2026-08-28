@@ -37,13 +37,18 @@ run_arbo_report <- function(path_biodata,
 
   #### Load and clean biodata ####
   log("Reading biodata...")
-  biodata_full <- read.csv(path_biodata, na.strings = c("NA", "-")) %>%
+  biodata_raw <- read.csv(path_biodata, na.strings = c("NA", "-")) 
+  
+  biodata_full <- biodata_raw %>%
     mutate(Date = as.character(Date),
            Date = as.Date(Date, format = date_format)) %>%
     arrange(Tree.ID)
 
+  date_example <- as.character(biodata_raw$Date[1])
   if (is.na(biodata_full$Date[1])) {
-    stop("Date is not loaded in properly. Most likely due to date format.")
+    stop("Date is not loaded in properly, likely due to wrong date format. Example of date: ", date_example)
+  } else {
+    log(paste("Example of a date in excel sheet:", date_example))
   }
 
   if (incl_crown_spread){

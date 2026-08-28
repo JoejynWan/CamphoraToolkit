@@ -119,8 +119,8 @@ PROJECTS <- list(
     icon        = "tree",
     category    = "Flora",
     status      = "live",
-    version     = "v2.4",
-    updated     = "2026-07-03"
+    version     = "v2.5",
+    updated     = "2026-08-28"
   ),
 
   list(
@@ -859,15 +859,64 @@ ui <- page_navbar(
       )
     )
   ),
-
-
+  
   # ── Arbo Report ─────────────────────────────────────────────────────────────────────────────────
   nav_menu(
     title = icon_text("Arbo Report", "tree"),
-
+    
+    # Resize Photos
+    nav_panel(
+      title = icon_text("Step 1: Resize Photos", "image"),
+      value = "arbo_resize",
+      
+      layout_sidebar(
+        fillable = TRUE,
+        sidebar = sidebar(
+          width = 340,
+          
+          h5("Input/output folders", class = "fw-bold mt-1"),
+          
+          p(class = "mb-1",
+            tooltip(span("Original photos folder", bsicons::bs_icon("info-circle")),
+                    "Folder containing the original full-size site photos (searched recursively).")),
+          shinyDirButton("arbophoto_source_dir", label = "Browse...",
+                         title = "Choose original photos directory",
+                         class = "btn-outline-secondary w-100 mb-1"),
+          verbatimTextOutput("arbophoto_source_dir_display", placeholder = TRUE),
+          
+          p(class = "mb-1 mt-2",
+            tooltip(span("Destination folder", bsicons::bs_icon("info-circle")),
+                    "Folder to save the resized photos into. Use this as the 'Resized photos folder' in Generate Report.")),
+          shinyDirButton("arbophoto_dest_dir", label = "Browse...",
+                         title = "Choose destination directory",
+                         class = "btn-outline-secondary w-100 mb-1"),
+          verbatimTextOutput("arbophoto_dest_dir_display", placeholder = TRUE),
+          
+          hr(),
+          numericInput("arbophoto_size",
+                       label = tooltip(
+                         span("Photo size (px)", bsicons::bs_icon("info-circle")),
+                         "Target width/height in pixels after resizing."
+                       ),
+                       value = 400, min = 50, step = 50),
+          
+          hr(),
+          actionButton("arbophoto_run_btn",
+                       label = tagList(bsicons::bs_icon("play-fill"), " Resize Photos"),
+                       class = "btn-primary w-100")
+        ),
+        
+        layout_column_wrap(
+          width = 1,
+          card(card_header(tagList(bsicons::bs_icon("terminal"), " Log")),
+               verbatimTextOutput("arbophoto_log_output"), height = 300)
+        )
+      )
+    ), 
+    
     # Generate Report
     nav_panel(
-      title = icon_text("Generate Report", "file-earmark-word"),
+      title = icon_text("Step 2: Generate Report", "file-earmark-word"),
       value = "arbo_report",
 
       layout_sidebar(
@@ -926,7 +975,7 @@ ui <- page_navbar(
           textInput("arbo_date_format",
                     label = tooltip(
                       span("Date format", bsicons::bs_icon("info-circle")),
-                      "Date format of the Date column in your CSV."
+                      "Date format in your CSV. E.g., %d/%m/%Y for 14/05/2026, %Y-%m-%d for 2026-05-14, %d/%m/%y for 14/05/26"
                     ),
                     value = "%d/%m/%Y"),
 
@@ -944,56 +993,6 @@ ui <- page_navbar(
                verbatimTextOutput("arbo_log_output"), height = 200),
           card(card_header(tagList(bsicons::bs_icon("file-earmark-word"), " Generated reports")),
                div(style = "overflow-x: auto;", tableOutput("arbo_preview_table")))
-        )
-      )
-    ),
-
-    # Resize Photos
-    nav_panel(
-      title = icon_text("Resize Photos", "image"),
-      value = "arbo_resize",
-
-      layout_sidebar(
-        fillable = TRUE,
-        sidebar = sidebar(
-          width = 340,
-
-          h5("Input/output folders", class = "fw-bold mt-1"),
-
-          p(class = "mb-1",
-            tooltip(span("Original photos folder", bsicons::bs_icon("info-circle")),
-                    "Folder containing the original full-size site photos (searched recursively).")),
-          shinyDirButton("arbophoto_source_dir", label = "Browse...",
-                         title = "Choose original photos directory",
-                         class = "btn-outline-secondary w-100 mb-1"),
-          verbatimTextOutput("arbophoto_source_dir_display", placeholder = TRUE),
-
-          p(class = "mb-1 mt-2",
-            tooltip(span("Destination folder", bsicons::bs_icon("info-circle")),
-                    "Folder to save the resized photos into. Use this as the 'Resized photos folder' in Generate Report.")),
-          shinyDirButton("arbophoto_dest_dir", label = "Browse...",
-                         title = "Choose destination directory",
-                         class = "btn-outline-secondary w-100 mb-1"),
-          verbatimTextOutput("arbophoto_dest_dir_display", placeholder = TRUE),
-
-          hr(),
-          numericInput("arbophoto_size",
-                       label = tooltip(
-                         span("Photo size (px)", bsicons::bs_icon("info-circle")),
-                         "Target width/height in pixels after resizing."
-                       ),
-                       value = 400, min = 50, step = 50),
-
-          hr(),
-          actionButton("arbophoto_run_btn",
-                       label = tagList(bsicons::bs_icon("play-fill"), " Resize Photos"),
-                       class = "btn-primary w-100")
-        ),
-
-        layout_column_wrap(
-          width = 1,
-          card(card_header(tagList(bsicons::bs_icon("terminal"), " Log")),
-               verbatimTextOutput("arbophoto_log_output"), height = 300)
         )
       )
     )
