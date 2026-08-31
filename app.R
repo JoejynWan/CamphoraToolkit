@@ -170,7 +170,7 @@ PROJECTS <- list(
     icon        = "pencil-square",
     category    = "Flora",
     status      = "beta",
-    version     = "v1.0",
+    version     = "v1.1",
     updated     = "2026-07-23"
   ),
 
@@ -1425,6 +1425,15 @@ ui <- page_navbar(
                       "Column holding the photo numbers, e.g. 9105-07, 9198-9201, 9230."
                     ),
                     value = "Photo"),
+
+          hr(),
+          h5("Naming", class = "fw-bold mt-1"),
+          textInput("cag_prefix",
+                    label = tooltip(
+                      span("Filename prefix (optional)", bsicons::bs_icon("info-circle")),
+                      "Added in parentheses ahead of the Tree ID, e.g. T1 gives (T1)P342_01.jpeg. Leave blank for no prefix."
+                    ),
+                    placeholder = "e.g. T1"),
 
           hr(),
           h5("Mode", class = "fw-bold mt-1"),
@@ -3314,6 +3323,7 @@ server <- function(input, output, session) {
           mode       = input$cag_mode,
           id_col     = trimws(input$cag_id_col),
           photo_col  = trimws(input$cag_photo_col),
+          prefix     = trimws(input$cag_prefix),
           log        = cag_log
         )
 

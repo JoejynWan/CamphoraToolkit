@@ -290,6 +290,7 @@ resort_flora_tag_dirs(
 
 cag_sheet <- "T1 20260708"
 cag_mode  <- "dry_run"   # "dry_run" -> preview only | "copy" -> safe | "rename" -> in place
+cag_prefix <- ""         # optional, e.g. "T1" -> (T1)P342_01.jpeg
 
 rename_photos_from_excel(
   excel_path = cag_excel_path,
@@ -297,5 +298,6 @@ rename_photos_from_excel(
   photo_dir  = cag_photo_dir,
   mode       = cag_mode,
   id_col     = "Tree ID",
-  photo_col  = "Photo"
+  photo_col  = "Photo",
+  prefix     = cag_prefix
 )

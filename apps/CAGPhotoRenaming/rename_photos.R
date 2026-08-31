@@ -8,6 +8,7 @@
 ##
 ##   Photo column formats supported:  9105-07  9108-110  9198-9201  9230  9230-32, 9240
 ##   Output names:                    P342_01.jpeg, P342_02.jpeg, P342_03.jpeg
+##   With prefix "T1":                (T1)P342_01.jpeg, (T1)P342_02.jpeg, (T1)P342_03.jpeg
 ##
 ## Helpers are prefixed cag_ because app.R sources every module into the same global environment.
 
@@ -87,6 +88,8 @@ cag_stem_number <- function(stem) {
 #' @param id_col        Column holding the new name. Default "Tree ID".
 #' @param photo_col     Column holding the photo numbers. Default "Photo".
 #' @param extensions    File extensions to consider (case-insensitive).
+#' @param prefix        Optional prefix, placed in parentheses ahead of the Tree ID,
+#'                      e.g. "T1" -> "(T1)P342_01.jpeg". Default "" (no prefix).
 #' @param suffix_single If TRUE, a tree with one photo still gets "_01". Default FALSE.
 #' @param pad           Digits in the sequence suffix. Default 2 -> _01, _02.
 #' @param log_csv       Path for the audit log. Default: <photo_dir>/rename_log_<timestamp>.csv.
@@ -102,6 +105,7 @@ rename_photos_from_excel <- function(excel_path,
                                      photo_col     = "Photo",
                                      extensions    = c("jpg", "jpeg", "png", "heic", "heif",
                                                        "dng", "cr2", "nef", "arw", "tif", "tiff"),
+                                     prefix        = "",
                                      suffix_single = FALSE,
                                      pad           = 2L,
                                      log_csv       = NULL,
@@ -178,8 +182,13 @@ rename_photos_from_excel <- function(excel_path,
 
   suffix <- ifelse(plan$n_photos > 1L | suffix_single,
                    paste0("_", formatC(plan$seq_no, width = pad, flag = "0")), "")
+  # an optional prefix sits in front of the Tree ID, in parentheses: "(T1)P342_01.jpeg"
+  safe_prefix <- if (length(prefix) != 1L || is.na(prefix)) "" else cag_sanitise_id(prefix)
+  safe_prefix <- gsub("^[(]|[)]$", "", safe_prefix)   # tolerate a prefix typed as "(T1)"
+  tag <- if (nzchar(safe_prefix)) paste0("(", safe_prefix, ")") else ""
+
   plan$new_name <- ifelse(is.na(plan$file), NA_character_,
-                          paste0(plan$safe_id, suffix, ".", plan$ext))
+                          paste0(tag, plan$safe_id, suffix, ".", plan$ext))
 
   plan$status <- ifelse(is.na(plan$file), "MISSING_FILE", "ok")
 
