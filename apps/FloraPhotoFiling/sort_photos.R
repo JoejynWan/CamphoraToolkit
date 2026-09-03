@@ -98,7 +98,7 @@ sort_flora_photos <- function(datasheet_path,
   log("Resolving photo numbers into photo paths...")
 
   data_photos <- data_folder %>%
-    mutate(PhotosFrom = get_flora_photo_paths(PhotoFolder, PhotoID)) %>%
+    mutate(PhotosFrom = get_flora_photo_paths(PhotoFolder, PhotoID, TAG_2025)) %>%
     unnest(PhotosFrom) %>%
     filter(!is.na(PhotosFrom)) %>%
     select(PhotosFrom, Family, Species, TAG_2025) %>%

@@ -49,8 +49,8 @@ BAT_SPECIES_DB_PATH <- "apps/BatRecordingProcessing/data/Species_Database_Bats.c
 
 #### CT Step 1: EXIF Extraction ####
 ## Uncomment and fill in paths before running
-path_processed <- "G:/Shared drives/01_Current_Projects_A-D/CR202 EMMP_Obayashi/02_Camera_Trapping/Camera_Trap_Data/02 Processed/Windsor Forest Monitoring/2026/20260715/"
-path_raw       <- "G:/Shared drives/01_Current_Projects_A-D/CR202 EMMP_Obayashi/02_Camera_Trapping/Camera_Trap_Data/01 Raw/Windsor Forest Monitoring/2026/20260715/"
+path_processed <- "G:/Shared drives/01_Current_Projects_S-Z/WCP EMMP ext infra/02_Camera_Trapping/Fauna monitoring/02_Processed/202608/"
+path_raw       <- "G:/Shared drives/01_Current_Projects_S-Z/WCP EMMP ext infra/02_Camera_Trapping/Fauna monitoring/01_Raw/202608/"
 
 extract_exif(
   path_processed        = path_processed,
@@ -74,7 +74,7 @@ offset_datetime(
 
 #### CT Step 2: Merge EXIFs ####
 ## Uncomment and fill in path before running
-path_exif_folder <- "C:/Users/joejyn/OneDrive/Camphora/Projects/CR202_Obayashi/EngNeo/Data/CT"
+path_exif_folder <- "G:/Shared drives/01_Current_Projects_S-Z/WCP EMMP ext infra/12_EMMP Analysis/CT data/"
 
 merging_exifs(
   path_exif_folder      = path_exif_folder,
@@ -85,7 +85,7 @@ merging_exifs(
 
 #### CT Step 3: Independent Detections ####
 ## Uncomment and fill in path before running
-input_ct_file <- "C:/Users/joejyn/OneDrive/Camphora/Projects/CR202_Obayashi/EngNeo/Data/CT/combined_exif_all.csv"
+input_ct_file <- "G:/Shared drives/01_Current_Projects_S-Z/WCP EMMP ext infra/12_EMMP Analysis/CT data/combined_exif_all.csv"
 
 indp_dets(
   input_ct_file         = input_ct_file,
@@ -256,12 +256,11 @@ recover_bat_meta(
 
 
 #### Flora Photo Filing: Sort Photos ####
-## Uncomment and fill in paths before running
-# flora_datasheet_path <- "Z:/path/to/BTNR_Master data_v106_JM.xlsx"
-# flora_photos_dir     <- "Z:/path/to/BTNR_Interim Report 3_Photos"
-# flora_sorted_dir     <- "Z:/path/to/Flora_and_Arboriculture_Batch3.2"
+flora_datasheet_path <- "G:/Shared drives/01_Current_Projects_A-D/BTNR_NParks/02_Data/Flora_and_Arboriculture/Main data files/BTNR_Master data_v140_JM.xlsx"
+flora_photos_dir     <- "G:/Shared drives/01_Current_Projects_A-D/BTNR_NParks/06_Photos/Flora_and_Arboriculture"
+flora_sorted_dir     <- "G:/Shared drives/01_Current_Projects_A-D/BTNR_NParks/08_Reports/02 Interim Reports/Interim Report 4/BTNR_Interim Report 4_Photos_Batch 4.2"
 
-flora_status_to_sort <- c("Batch 3.1", "Batch 3.2")
+flora_status_to_sort <- c("To sort (Batch 4.2)")
 
 sort_flora_photos(
   datasheet_path = flora_datasheet_path,

@@ -158,8 +158,8 @@ PROJECTS <- list(
     icon        = "folder",
     category    = "Flora",
     status      = "beta",
-    version     = "v1.0",
-    updated     = "2026-07-17"
+    version     = "v1.1",
+    updated     = "2026-09-03"
   ), 
   
   list(
