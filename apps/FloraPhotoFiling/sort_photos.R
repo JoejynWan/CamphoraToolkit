@@ -32,6 +32,11 @@ sort_flora_photos <- function(datasheet_path,
                               sheet_name = "Photo Filing (For JO)",
                               log        = message){
 
+  ## Both folders are pasted into paths that are later compared against list.files() output, so
+  ## strip any trailing separator first — see normalise_dir_path() in modules/utils.R.
+  photos_dir <- normalise_dir_path(photos_dir)
+  sorted_dir <- normalise_dir_path(sorted_dir)
+
   #### Read and clean data ####
 
   log(paste("Reading datasheet sheet:", sheet_name))
@@ -142,8 +147,9 @@ sort_flora_photos <- function(datasheet_path,
                 "previously sorted photos whose family/species changed."))
     }
 
-    for (species_dir in list.dirs(sorted_dir, recursive = TRUE)){
-      if (dir.exists(species_dir) && length(dir(species_dir)) == 0) {
+    ## setdiff() so sorted_dir itself is never deleted, even when it ends up empty
+    for (species_dir in setdiff(list.dirs(sorted_dir, recursive = TRUE), sorted_dir)){
+      if (dir.exists(species_dir) && length(dir(species_dir, all.files = TRUE, no.. = TRUE)) == 0) {
         unlink(species_dir, recursive = TRUE, force = TRUE)
         log(paste("Deleted empty folder:", species_dir))
       }

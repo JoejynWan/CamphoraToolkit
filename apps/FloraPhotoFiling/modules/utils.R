@@ -9,6 +9,25 @@
 
 #### Helper functions ####
 
+#' Normalise a folder path so paths built from it can be compared as strings.
+#'
+#' file.path() joins blindly, so a directory given with a trailing separator produces "dir//sub",
+#' while list.files(full.names = TRUE) always returns "dir/sub". Comparing the two then reports
+#' every file as having moved. Backslashes are normalised for the same reason.
+#'
+#' @param path A folder path, possibly with backslashes or a trailing separator.
+#'
+#' @return The path with forward slashes and no trailing separator.
+normalise_dir_path <- function(path){
+  if (length(path) == 0 || is.na(path)) return(path)
+
+  path <- gsub("\\\\", "/", path)
+  path <- sub("(?<=[^:/])/+$", "", path, perl = TRUE)   # keep a bare "/" or a drive root "C:/"
+
+  path
+}
+
+
 #' Parse one PhotoID cell, e.g. "6807-12, 6820", into the photo numbers it refers to.
 #'
 #' Anything that cannot be read as a number or a number range is reported back rather than being

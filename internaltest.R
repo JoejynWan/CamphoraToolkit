@@ -256,7 +256,7 @@ recover_bat_meta(
 #### Flora Photo Filing: Sort Photos ####
 flora_datasheet_path <- "G:/Shared drives/01_Current_Projects_A-D/BTNR_NParks/02_Data/Flora_and_Arboriculture/Main data files/BTNR_Master data_v141_JM.xlsx"
 flora_photos_dir     <- "G:/Shared drives/01_Current_Projects_A-D/BTNR_NParks/06_Photos/Flora_and_Arboriculture"
-flora_sorted_dir     <- "G:/Shared drives/01_Current_Projects_A-D/BTNR_NParks/08_Reports/02 Interim Reports/Interim Report 4/BTNR_Interim Report 4_Photos_Batch 4.3/"
+flora_sorted_dir     <- "G:/Shared drives/01_Current_Projects_A-D/BTNR_NParks/08_Reports/02 Interim Reports/Interim Report 4/BTNR_Interim Report 4_Photos_Batch 4.3"
 
 flora_status_to_sort <- c("To sort (Batch 4.3)")
 
