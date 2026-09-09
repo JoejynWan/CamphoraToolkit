@@ -702,7 +702,7 @@ ui <- page_navbar(
           textInput("date_format",
                     label = tooltip(
                       span("Date format", bsicons::bs_icon("info-circle")),
-                      "Date format of your CSV. Default '%d/%m/%Y %I:%M:%S %p' means Day/Month/Year Hour:Minute:Second am/pm."
+                      "Date format of your CSV. Default '%d/%m/%Y %I:%M:%S %p' means Day/Month/Year Hour:Minute:Second am/pm. Newer Kor exports use 24-hour times instead: '%d/%m/%Y %H:%M:%S'. If the format does not match, the log will show the one to use."
                     ),
                     value = "%d/%m/%Y %I:%M:%S %p"),
 

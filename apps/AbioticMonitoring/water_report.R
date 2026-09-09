@@ -4,21 +4,27 @@ library(tidyverse)
 
 
 #### Fixed variables ####
-COLUMN_RENAME_MAP <- c(
-  "DATE..M.d.yyyy." = "Date", 
-  "TIME..h.mm.ss.tt." = "Time", 
-  "DEPTH.M" = "Depth", 
-  "SPCOND.S.CM" = "Conductivity", 
-  "ODO.MG.L" = "DissolvedOxygen",
-  "PH" = "pH",
-  "SAL.PSU" = "Salinity", 
-  "TEMP.C" = "Temperature", 
-  "TURBIDITY.NTU" = "Turbidity"
+## A standard column can arrive under more than one raw header name, because Kor renames columns
+## between software versions and labels them with whichever unit the sonde was configured for. List
+## every accepted raw name against the standard name; raw names are written as make.names() mangles
+## them, i.e. every non-alphanumeric character becomes a dot.
+WATER_COLUMN_RENAME_MAP <- list(
+  Date            = c("DATE..M.d.yyyy.", "DATE..dd.MM.yyyy."),
+  Time            = c("TIME..h.mm.ss.tt.", "TIME..HH.mm.ss."),
+  Depth           = c("DEPTH.M"),
+  Conductivity    = c("SPCOND.S.CM"),
+  DissolvedOxygen = c("ODO.MG.L"),
+  pH              = c("PH"),
+  Salinity        = c("SAL.PSU"),
+  Temperature     = c("TEMP.C"),
+  Turbidity       = c("TURBIDITY.NTU", "TURBIDITY.FNU")
 )
 
-COLUMN_OUTPUT_NAMES <- c(
-  PointNo = "Point No.", 
-  Date = "Measurement Date", 
+## Turbidity is left without its unit here because the sonde reports either NTU or FNU; in_situ()
+## fills in whichever unit the source file used.
+WATER_COLUMN_OUTPUT_NAMES <- c(
+  PointNo = "Point No.",
+  Date = "Measurement Date",
   Time = "Measurement Time", 
   Depth = "Measurement Depth", 
   Weather = "Weather Condition", 
@@ -27,35 +33,140 @@ COLUMN_OUTPUT_NAMES <- c(
   pH = "pH Value", 
   Salinity = "Salinity (PSU)", 
   Temperature = "Temperature (°C)", 
-  Turbidity = "Turbidity (NTU)"
+  Turbidity = "Turbidity"
 )
 
-DEPTH_THRES <- 2
+WATER_DEPTH_THRES <- 2
+
+## Kor writes its date/time pattern into the header itself, e.g. "DATE (dd/MM/yyyy)". These tokens
+## translate that pattern into the strptime format that as.POSIXct() wants, so a failed parse can
+## tell the user exactly which date_format to pass. Longest tokens first, matched in one pass.
+WATER_DATE_TOKEN_MAP <- c(
+  "yyyy" = "%Y", "yy"   = "%y", 
+  "MMMM" = "%B", "MMM"  = "%b", "MM" = "%m", "M" = "%m", 
+  "dddd" = "%A", "ddd"  = "%a", "dd" = "%d", "d" = "%d", 
+  "HH"   = "%H", "hh"   = "%I", "H"  = "%H", "h" = "%I", 
+  "mm"   = "%M", "m"    = "%M", 
+  "ss"   = "%S", "s"    = "%S", 
+  "tt"   = "%p", "t"    = "%p"
+)
+
+
+#### Helper functions ####
+## Newer Kor exports are UTF-16 with a byte-order mark, older ones are plain ANSI. readLines() reads
+## the former as one-character lines unless the connection is told the encoding, so sniff the BOM.
+water_read_export_lines <- function(path_input){
+  bom <- readBin(path_input, "raw", n = 2)
+  enc <- if (identical(bom, as.raw(c(0xFF, 0xFE)))) "UTF-16LE" 
+         else if (identical(bom, as.raw(c(0xFE, 0xFF)))) "UTF-16BE" 
+         else "native.enc"
+
+  con <- file(path_input, encoding = enc)
+  on.exit(close(con))
+
+  readLines(con, warn = enc == "native.enc") %>%
+    iconv("latin1", "ASCII", sub = "")
+}
+
+## rename(any_of()) wants a c(new_name = raw_name) vector; duplicated new names are fine because
+## only one of the accepted raw names is ever present in a given file.
+water_column_rename_vector <- function(){
+  setNames(unlist(WATER_COLUMN_RENAME_MAP, use.names = FALSE), 
+           rep(names(WATER_COLUMN_RENAME_MAP), lengths(WATER_COLUMN_RENAME_MAP)))
+}
+
+water_kor_to_r_format <- function(pattern){
+  if (is.na(pattern)) return(NA_character_)
+  str_replace_all(pattern, paste(names(WATER_DATE_TOKEN_MAP), collapse = "|"), 
+                  function(tokens) unname(WATER_DATE_TOKEN_MAP[tokens]))
+}
+
+## Built when no row's date/time could be parsed: shows what the file actually contains and, where
+## the header declares a pattern that works, the exact date_format argument to use instead.
+water_date_format_message <- function(header_line, data, date_format){
+  declared_date <- str_match(header_line, "DATE\\s*\\(([^)]*)\\)")[, 2]
+  declared_time <- str_match(header_line, "TIME\\s*\\(([^)]*)\\)")[, 2]
+  suggested     <- str_trim(paste(water_kor_to_r_format(declared_date),
+                                  water_kor_to_r_format(declared_time)))
+  example       <- paste(data$Date[1], data$Time[1])
+  
+  msg <- c(
+    paste0("Could not read any date/time using date_format = \"", date_format, "\"."), 
+    paste0("  Date format declared in the file header: ", 
+           if (is.na(declared_date)) "not stated" else declared_date), 
+    paste0("  Time format declared in the file header: ", 
+           if (is.na(declared_time)) "not stated" else declared_time), 
+    paste0("  First date/time value in the file:       ", example)
+  )
+  
+  works <- !str_detect(suggested, "NA") && !is.na(as.POSIXct(example, format = suggested))
+  c(msg, if (works) paste0("  Re-run with date_format = \"", suggested, "\"") 
+         else       "  Adjust the date_format argument to match the value shown above.") %>%
+    paste(collapse = "\n")
+}
 
 
 #### Main Function ####
 in_situ <- function(path_input, time_threshold, date_format = "%d/%m/%Y %I:%M:%S %p"){
   
-  raw_lines <- readLines(path_input, warn = T) %>%
-    iconv("latin1", "ASCII", sub = "")
+  raw_lines <- water_read_export_lines(path_input)
   header_positions <- which(str_detect(raw_lines, "FILE NAME"))
   
-  process_block <- function(header_pos){
-    block <- raw_lines[header_pos:(header_pos+1)] %>%
-      read.table(text = ., header = T, stringsAsFactors = F, sep = ',')
+  if (length(header_positions) == 0)
+    stop("No column header row (one containing \"FILE NAME\") found in ", basename(path_input), 
+         ". Is this a Kor/EXO measurement file export?", call. = FALSE)
+  
+  ## A block is one header row plus every measurement row under it, down to the next header. Lines
+  ## not starting with a digit are export metadata (MEAN VALUE:, SENSOR SERIAL NUMBER:, blanks)
+  ## rather than measurements, so drop them; the time column always starts the row with a digit.
+  process_block <- function(i){
+    start <- header_positions[i]
+    end   <- if (i < length(header_positions)) header_positions[i+1] - 1 else length(raw_lines)
+    body  <- if (end > start) raw_lines[(start+1):end] else character(0)
+    
+    read.table(text = c(raw_lines[start], body[str_detect(body, "^\\s*\\d")]), 
+               header = T, stringsAsFactors = F, sep = ',')
   }
   
-  all_blocks <- lapply(header_positions, process_block) %>%
+  all_blocks <- lapply(seq_along(header_positions), process_block) %>%
     bind_rows() %>%
     select(where(~ !all(is.na(.) | str_trim(as.character(.)) == ""))) %>%
-    mutate(across(where(is.character), str_trim)) %>%
-    rename(any_of(setNames(names(COLUMN_RENAME_MAP), COLUMN_RENAME_MAP))) %>%
+    mutate(across(where(is.character), str_trim))
+
+  ## Read the turbidity unit off the raw header before renaming loses it: the sonde reports NTU or
+  ## FNU depending on the sensor fitted, and the output column is labelled with whichever was used.
+  turbidity_unit <- intersect(WATER_COLUMN_RENAME_MAP$Turbidity, names(all_blocks))[1] %>%
+    str_remove("^TURBIDITY[.]")
+
+  all_blocks <- all_blocks %>%
+    rename(any_of(water_column_rename_vector()))
+
+  if (nrow(all_blocks) == 0)
+    stop("No measurement rows found in ", basename(path_input), ".", call. = FALSE)
+  
+  missing_cols <- setdiff(names(WATER_COLUMN_RENAME_MAP), names(all_blocks))
+  if (length(missing_cols) > 0)
+    stop("Column(s) not found in ", basename(path_input), ": ", 
+         paste(missing_cols, collapse = ", "), "\n", 
+         "  Columns present: ", paste(names(all_blocks), collapse = ", "), "\n", 
+         "  Add each missing column's name in this file to WATER_COLUMN_RENAME_MAP in ",
+         "water_report.R.",
+         call. = FALSE)
+  
+  all_blocks <- all_blocks %>%
     mutate(DateTime = paste(Date, Time, sep = " "), 
            DateTime = as.POSIXct(DateTime, format = date_format)) %>%
     arrange(DateTime)
   
+  if (all(is.na(all_blocks$DateTime)))
+    stop(water_date_format_message(raw_lines[header_positions[1]], all_blocks, date_format), 
+         call. = FALSE)
+  
+  output_names <- WATER_COLUMN_OUTPUT_NAMES
+  output_names["Turbidity"] <- paste0(output_names["Turbidity"], " (", turbidity_unit, ")")
+
   output_data <- all_blocks %>%
-    select(DateTime, Date, Time, Depth, Conductivity, DissolvedOxygen, pH, Salinity, 
+    select(DateTime, Date, Time, Depth, Conductivity, DissolvedOxygen, pH, Salinity,
            Temperature, Turbidity) %>%
     mutate(time_diff = as.numeric(difftime(DateTime, lag(DateTime), units = "secs")), 
            group_id = cumsum(is.na(time_diff) | time_diff >= time_threshold*60)) %>%
@@ -71,11 +182,11 @@ in_situ <- function(path_input, time_threshold, date_format = "%d/%m/%Y %I:%M:%S
     filter(!is.nan(Depth)) %>%
     mutate(PointNo = row_number(), 
            Weather = "", 
-           Depth = case_when(Depth < DEPTH_THRES ~ "Near Water Surface", 
+           Depth = case_when(Depth < WATER_DEPTH_THRES ~ "Near Water Surface", 
                              .default = as.character(Depth))) %>%
     select(PointNo, Date, Time, Depth, Weather, Conductivity, DissolvedOxygen, pH, Salinity, 
            Temperature, Turbidity) %>%
-    rename(any_of(setNames(names(COLUMN_OUTPUT_NAMES), COLUMN_OUTPUT_NAMES)))
+    rename(any_of(setNames(names(output_names), output_names)))
   
   
   #### Save out data as workbook ####
