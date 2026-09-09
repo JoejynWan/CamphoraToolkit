@@ -96,11 +96,9 @@ indp_dets(
 
 
 #### Abiotic: Water Monitoring ####
-## Uncomment and fill in path before running
-# path_input <- "Z:/path/to/EXO2_export.csv"
-
-time_threshold <- 2                          # minutes
-date_format    <- "%d/%m/%Y %I:%M:%S %p"    # adjust if logger uses different format
+path_input <- "Kor Measurement File Export - 090726 173306.csv"
+time_threshold <- 2                   # minutes
+date_format    <- "%d/%m/%Y %H:%M:%S" # EXO2: "%d/%m/%Y %H:%M:%S"; Hanna: "%d/%m/%Y %I:%M:%S %p"
 
 in_situ(path_input, time_threshold, date_format)
 
@@ -256,11 +254,11 @@ recover_bat_meta(
 
 
 #### Flora Photo Filing: Sort Photos ####
-flora_datasheet_path <- "G:/Shared drives/01_Current_Projects_A-D/BTNR_NParks/02_Data/Flora_and_Arboriculture/Main data files/BTNR_Master data_v140_JM.xlsx"
+flora_datasheet_path <- "G:/Shared drives/01_Current_Projects_A-D/BTNR_NParks/02_Data/Flora_and_Arboriculture/Main data files/BTNR_Master data_v141_JM.xlsx"
 flora_photos_dir     <- "G:/Shared drives/01_Current_Projects_A-D/BTNR_NParks/06_Photos/Flora_and_Arboriculture"
-flora_sorted_dir     <- "G:/Shared drives/01_Current_Projects_A-D/BTNR_NParks/08_Reports/02 Interim Reports/Interim Report 4/BTNR_Interim Report 4_Photos_Batch 4.2"
+flora_sorted_dir     <- "G:/Shared drives/01_Current_Projects_A-D/BTNR_NParks/08_Reports/02 Interim Reports/Interim Report 4/BTNR_Interim Report 4_Photos_Batch 4.3/"
 
-flora_status_to_sort <- c("To sort (Batch 4.2)")
+flora_status_to_sort <- c("To sort (Batch 4.3)")
 
 sort_flora_photos(
   datasheet_path = flora_datasheet_path,
