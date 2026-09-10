@@ -93,8 +93,8 @@ PROJECTS <- list(
     icon        = "moisture",
     category    = "Abiotic",
     status      = "live",
-    version     = "v1.1",
-    updated     = "2026-04-08"
+    version     = "v1.2",
+    updated     = "2026-09-10"
   ),
 
   list(

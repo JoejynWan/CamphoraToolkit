@@ -75,6 +75,18 @@ water_column_rename_vector <- function(){
            rep(names(WATER_COLUMN_RENAME_MAP), lengths(WATER_COLUMN_RENAME_MAP)))
 }
 
+## Attached to every error raised once the file has been read: the header row(s) exactly as they
+## appear in the export, plus the names R imported them as (make.names() turns every non-
+## alphanumeric character into a dot). A header the rename map does not cover can then be spotted
+## from the error alone, without opening the file.
+water_header_report <- function(header_lines, imported_names){
+  c("  Header row(s) in the file:", 
+    paste0("    Block ", seq_along(header_lines), ": ", str_trim(header_lines)), 
+    "  Column names as R imported them:", 
+    paste0("    ", paste(imported_names, collapse = ", "))) %>%
+    paste(collapse = "\n")
+}
+
 water_kor_to_r_format <- function(pattern){
   if (is.na(pattern)) return(NA_character_)
   str_replace_all(pattern, paste(names(WATER_DATE_TOKEN_MAP), collapse = "|"), 
@@ -138,8 +150,22 @@ in_situ <- function(path_input, time_threshold, date_format = "%d/%m/%Y %I:%M:%S
   turbidity_unit <- intersect(WATER_COLUMN_RENAME_MAP$Turbidity, names(all_blocks))[1] %>%
     str_remove("^TURBIDITY[.]")
 
-  all_blocks <- all_blocks %>%
-    rename(any_of(water_column_rename_vector()))
+  ## Captured before rename(): these are the raw names the rename map has to match, and the ones
+  ## worth showing when anything downstream cannot find a standard column.
+  header_report <- water_header_report(raw_lines[header_positions], names(all_blocks))
+
+  ## Everything past this point works on the renamed standard columns, so an unexpected failure
+  ## (typically "object 'Time' not found" when a header slipped past the rename map) only makes
+  ## sense with the file's own headers attached.
+  with_header_context <- function(expr){
+    tryCatch(expr, error = function(e) 
+      stop(conditionMessage(e), "\n", header_report, call. = FALSE))
+  }
+
+  all_blocks <- with_header_context(
+    all_blocks %>%
+      rename(any_of(water_column_rename_vector()))
+  )
 
   if (nrow(all_blocks) == 0)
     stop("No measurement rows found in ", basename(path_input), ".", call. = FALSE)
@@ -148,15 +174,17 @@ in_situ <- function(path_input, time_threshold, date_format = "%d/%m/%Y %I:%M:%S
   if (length(missing_cols) > 0)
     stop("Column(s) not found in ", basename(path_input), ": ", 
          paste(missing_cols, collapse = ", "), "\n", 
-         "  Columns present: ", paste(names(all_blocks), collapse = ", "), "\n", 
+         header_report, "\n", 
          "  Add each missing column's name in this file to WATER_COLUMN_RENAME_MAP in ",
          "water_report.R.",
          call. = FALSE)
   
-  all_blocks <- all_blocks %>%
-    mutate(DateTime = paste(Date, Time, sep = " "), 
-           DateTime = as.POSIXct(DateTime, format = date_format)) %>%
-    arrange(DateTime)
+  all_blocks <- with_header_context(
+    all_blocks %>%
+      mutate(DateTime = paste(Date, Time, sep = " "), 
+             DateTime = as.POSIXct(DateTime, format = date_format)) %>%
+      arrange(DateTime)
+  )
   
   if (all(is.na(all_blocks$DateTime)))
     stop(water_date_format_message(raw_lines[header_positions[1]], all_blocks, date_format), 
@@ -165,28 +193,30 @@ in_situ <- function(path_input, time_threshold, date_format = "%d/%m/%Y %I:%M:%S
   output_names <- WATER_COLUMN_OUTPUT_NAMES
   output_names["Turbidity"] <- paste0(output_names["Turbidity"], " (", turbidity_unit, ")")
 
-  output_data <- all_blocks %>%
-    select(DateTime, Date, Time, Depth, Conductivity, DissolvedOxygen, pH, Salinity,
-           Temperature, Turbidity) %>%
-    mutate(time_diff = as.numeric(difftime(DateTime, lag(DateTime), units = "secs")), 
-           group_id = cumsum(is.na(time_diff) | time_diff >= time_threshold*60)) %>%
-    group_by(group_id) %>%
-    summarise(
-      DateTime = first(DateTime),
-      Date = first(Date), 
-      Time = first(Time), 
-      across(c(Depth, Conductivity, DissolvedOxygen, pH, Salinity, Temperature, Turbidity),
-             ~ signif(mean(.x, na.rm = TRUE), digits = 3)),
-      .groups = "drop"
-    ) %>%
-    filter(!is.nan(Depth)) %>%
-    mutate(PointNo = row_number(), 
-           Weather = "", 
-           Depth = case_when(Depth < WATER_DEPTH_THRES ~ "Near Water Surface", 
-                             .default = as.character(Depth))) %>%
-    select(PointNo, Date, Time, Depth, Weather, Conductivity, DissolvedOxygen, pH, Salinity, 
-           Temperature, Turbidity) %>%
-    rename(any_of(setNames(names(output_names), output_names)))
+  output_data <- with_header_context(
+    all_blocks %>%
+      select(DateTime, Date, Time, Depth, Conductivity, DissolvedOxygen, pH, Salinity,
+             Temperature, Turbidity) %>%
+      mutate(time_diff = as.numeric(difftime(DateTime, lag(DateTime), units = "secs")), 
+             group_id = cumsum(is.na(time_diff) | time_diff >= time_threshold*60)) %>%
+      group_by(group_id) %>%
+      summarise(
+        DateTime = first(DateTime),
+        Date = first(Date), 
+        Time = first(Time), 
+        across(c(Depth, Conductivity, DissolvedOxygen, pH, Salinity, Temperature, Turbidity),
+               ~ signif(mean(.x, na.rm = TRUE), digits = 3)),
+        .groups = "drop"
+      ) %>%
+      filter(!is.nan(Depth)) %>%
+      mutate(PointNo = row_number(), 
+             Weather = "", 
+             Depth = case_when(Depth < WATER_DEPTH_THRES ~ "Near Water Surface", 
+                               .default = as.character(Depth))) %>%
+      select(PointNo, Date, Time, Depth, Weather, Conductivity, DissolvedOxygen, pH, Salinity, 
+             Temperature, Turbidity) %>%
+      rename(any_of(setNames(names(output_names), output_names)))
+  )
   
   
   #### Save out data as workbook ####
