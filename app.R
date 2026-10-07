@@ -106,8 +106,8 @@ PROJECTS <- list(
     icon        = "camera",
     category    = "Fauna",
     status      = "live",
-    version     = "v2.1",
-    updated     = "2026-07-03"
+    version     = "v2.2",
+    updated     = "2026-10-07"
   ),
 
   list(
