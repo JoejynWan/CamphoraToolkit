@@ -48,9 +48,8 @@ BAT_SPECIES_DB_PATH <- "apps/BatRecordingProcessing/data/Species_Database_Bats.c
 
 
 #### CT Step 1: EXIF Extraction ####
-## Uncomment and fill in paths before running
-path_processed <- "G:/Shared drives/01_Current_Projects_S-Z/WCP EMMP ext infra/02_Camera_Trapping/Fauna monitoring/02_Processed/202608/"
-path_raw       <- "G:/Shared drives/01_Current_Projects_S-Z/WCP EMMP ext infra/02_Camera_Trapping/Fauna monitoring/01_Raw/202608/"
+path_processed <- "G:/Shared drives/02_Archived_Projects_S-Z/Woodlands North Coast_DHI/02_Camera_Trapping/Camera_Trap_Data/02 Processed/20230116/CT09_20230116"
+path_raw       <- "G:/Shared drives/02_Archived_Projects_S-Z/Woodlands North Coast_DHI/02_Camera_Trapping/Camera_Trap_Data/01 Raw/20230116/CT09_20230116"
 
 extract_exif(
   path_processed        = path_processed,
@@ -60,21 +59,25 @@ extract_exif(
 
 
 #### CT Step 1.1: Offset DateTime ####
-## Uncomment and fill in path before running
-# exif_path <- "Z:/path/to/station_exif.csv"
+exif_path <- "G:/Shared drives/02_Archived_Projects_S-Z/Woodlands North Coast_DHI/02_Camera_Trapping/Camera_Trap_Data/02 Processed/20230116/CT09_20230116/CT09_20230116_exif.csv"
 
-## Either a number of hours (e.g. -12) or the correct DateTime of the first video
-offset <- "2025-11-13 08:00:00"
+## Either a number of hours (e.g. -12) or the correct DateTime of the anchor video
+offset <- "2022-12-14 06:30:00"
+
+## Optional: name of the first video with a wrong clock. Videos before it are left
+## untouched, and it becomes the anchor. NA corrects the whole exif from the first video.
+from_video <- "IMG_0008.AVI"   # e.g. "IMG_0008.AVI" or NA
 
 offset_datetime(
-  exif_path = exif_path,
-  offset     = offset
+  exif_path  = exif_path,
+  offset     = offset,
+  from_video = from_video
 )
 
 
 #### CT Step 2: Merge EXIFs ####
 ## Uncomment and fill in path before running
-path_exif_folder <- "G:/Shared drives/01_Current_Projects_S-Z/WCP EMMP ext infra/12_EMMP Analysis/CT data/"
+path_exif_folder <- "G:/Shared drives/02_Archived_Projects_S-Z/Woodlands North Coast_DHI/02_Camera_Trapping/Camera_Trap_Data/02 Processed/"
 
 merging_exifs(
   path_exif_folder      = path_exif_folder,

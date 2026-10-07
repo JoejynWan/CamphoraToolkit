@@ -542,10 +542,17 @@ ui <- page_navbar(
           h5("Offset", class = "fw-bold mt-1"),
           textInput("s1a_offset",
                     label = tooltip(
-                      span("Hours to offset, or correct first-video DateTime", bsicons::bs_icon("info-circle")),
-                      "Enter a number of hours (e.g. -12 or 5), OR the actual correct DateTime of the first video (e.g. 2025-11-13 08:00:00)."
+                      span("Hours to offset, or correct anchor-video DateTime", bsicons::bs_icon("info-circle")),
+                      "Enter a number of hours (e.g. -12 or 5), OR the actual correct DateTime of the anchor video (e.g. 2025-11-13 08:00:00). The anchor is the first video, unless a video name is given below."
                     ),
                     placeholder = "e.g. -12  or  2025-11-13 08:00:00"),
+
+          textInput("s1a_from_video",
+                    label = tooltip(
+                      span("Fix from this video onwards (optional)", bsicons::bs_icon("info-circle")),
+                      "Leave blank to correct the whole exif. If the clock only went wrong partway through, enter that video's name (e.g. IMG_0008.AVI): it becomes the anchor, and all earlier videos are left untouched."
+                    ),
+                    placeholder = "e.g. IMG_0008.AVI"),
 
           hr(),
           actionButton("s1a_run_btn",
@@ -1523,13 +1530,14 @@ ui <- page_navbar(
               p("Corrects FileModifyDate/Date/Time in a Step 1 exif.csv when the camera's clock was wrong at the time of recording."),
               tags$ol(
                 tags$li("Upload the ", code("*_exif.csv"), " from Step 1."),
-                tags$li("Enter either an ", strong("hour offset"), " (e.g. -12) or the ", strong("correct DateTime of the first video"), " (e.g. 2025-11-13 08:00:00)."),
+                tags$li("Enter either an ", strong("hour offset"), " (e.g. -12) or the ", strong("correct DateTime of the anchor video"), " (e.g. 2025-11-13 08:00:00)."),
+                tags$li("If the clock only went wrong partway through, enter the name of the first affected video (e.g. ", code("IMG_0008.AVI"), ") under ", strong("Fix from this video onwards"), ". That video becomes the anchor, and all earlier videos are left untouched. Leave it blank to correct the whole exif, anchored to the first video."),
                 tags$li("Click ", strong("Apply Offset"), "."),
                 tags$li("Download the corrected ", code("*_offset_exif.csv"), " output.")
               ),
               hr(),
               p(strong("Output:")),
-              tags$ul(tags$li("Same CSV as Step 1, with FileModifyDate/Date/Time shifted by the offset."))
+              tags$ul(tags$li("Same CSV as Step 1, with FileModifyDate/Date/Time shifted by the offset (for the affected videos only, if a video name was given)."))
             )
           ),
 
@@ -2157,15 +2165,16 @@ server <- function(input, output, session) {
     s1a_rv$preview_data <- NULL
 
     if (is.null(input$s1a_exif_file))          { s1a_log("ERROR: No exif CSV uploaded."); return() }
-    if (trimws(input$s1a_offset) == "")        { s1a_log("ERROR: Please enter an hour offset or the correct first-video DateTime."); return() }
+    if (trimws(input$s1a_offset) == "")        { s1a_log("ERROR: Please enter an hour offset or the correct anchor-video DateTime."); return() }
 
     withProgress(message = "Applying DateTime offset...", value = 0, {
       tryCatch({
         incProgress(0.2)
 
         out_path <- offset_datetime(
-          exif_path = input$s1a_exif_file$datapath,
+          exif_path  = input$s1a_exif_file$datapath,
           offset     = trimws(input$s1a_offset),
+          from_video = trimws(input$s1a_from_video),
           log        = s1a_log
         )
 
