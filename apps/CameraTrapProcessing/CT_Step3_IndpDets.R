@@ -28,11 +28,16 @@ calc_difftime <- function(x, indp_interval = 3600){
 
 
 #### Main function ####
-indp_dets <- function(input_ct_file, path_species_database, indp_interval = 3600, rm_stations = NA, 
-                      log_fn = message){
+indp_dets <- function(input_ct_file, path_species_database, indp_interval = 3600, rm_stations = NA,
+                      log_fn = message, file_label = basename(input_ct_file)){
 
-  ## Load the raw data file
-  ctdata <- read.csv(input_ct_file, head = T, fileEncoding = "UTF-8-BOM") #ctdataSample
+  ## Load the raw data file. Its DateTimes are parsed rather than read as-is, as this CSV has
+  ## often been opened and re-saved in Excel (22/02/2023 20:54, AM/PM times, dropped seconds)
+  required <- c("Station", "SamplingDate", "FileModifyDate", "Date", "Time", "FileName",
+                "ScientificName", "Quantity", "Remarks")
+  ctdata <- read_exif_csv(input_ct_file, required, file_label) %>%
+    parse_quantity(file_label) %>%
+    read_exif_datetimes(context = file_label, log_fn = log_fn)
   
   species_database <- read.xlsx(path_species_database, sheet = "Species_Database")
   check_speciesdatabase(species_database)
@@ -65,8 +70,10 @@ indp_dets <- function(input_ct_file, path_species_database, indp_interval = 3600
                            collapse = "; ")) %>%
     ungroup() %>%
     filter(!difftime < indp_interval) %>%
-    select(-difftime, -indpdet_gp)
-  
+    select(-difftime, -indpdet_gp) %>%
+    # Formatted rather than written as POSIXct, so that midnight timings are printed
+    mutate(FileModifyDate = format(FileModifyDate, format = "%Y-%m-%d %H:%M:%S"))
+
   output_dir <- dirname(input_ct_file)
   output_indp_det_full_path <- file.path(output_dir, 'ct_indp_det_full.csv')
   write.csv(ctdata_full, output_indp_det_full_path, row.names = F)

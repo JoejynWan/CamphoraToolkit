@@ -3,20 +3,22 @@
 #--------------------------------------------------------#
 
 #### Helper functions ####
-read.exif <- function(exif_file){
-  output <- tryCatch(
-    read.csv(exif_file, colClasses = c("character", "character", "character", "character", "character",
-                                       "character", "character", "character", "character", 
-                                       "numeric", "character")),
-    error = function(e) stop(e, "Check the format for ", exif_file) 
-  ) %>%
-    mutate(Date = parse_date_time(Date, orders = c("ymd", "dmy")), 
-           Time = parse_date_time(Time, orders = c("HMS", "HM")), 
-           Time = format(Time, format = "%H:%M:%S"), 
-           FileModifyDate = parse_date_time(FileModifyDate, orders = c("ymd HMS", "dmy HM", "dmy HMS")), 
-           path = exif_file)
-  
-  return(output)
+EXIF_COLUMNS <- c("Station", "SamplingDate", "FileModifyDate", "Date", "Time", "FileName",
+                  "Genus", "Species", "ScientificName", "Quantity", "Remarks")
+
+## Only the exif columns are kept by default, so that an exif re-saved by Excel with a stray
+## trailing column still reads; `all_columns` keeps any the user has added (edited combined CSV)
+read.exif <- function(exif_file, log_fn = message, all_columns = FALSE){
+  context <- basename(exif_file)
+
+  raw  <- read_exif_csv(exif_file, EXIF_COLUMNS, context)
+  exif <- if (all_columns) raw else raw[, EXIF_COLUMNS]
+
+  exif <- parse_quantity(exif, context)
+  exif <- read_exif_datetimes(exif, context = context, log_fn = log_fn)
+  if (!all_columns) exif$path <- exif_file
+
+  return(exif)
 }
 
 #### Main function ####
@@ -29,7 +31,10 @@ merging_exifs <- function(path_exif_folder, path_species_database, input_combine
   exif_files <- list.files(path_exif_folder, pattern = "*_exif.csv", 
                            full.names = T, recursive = T)
   log_fn(paste("Found", length(exif_files), "exif files."))
-  exif_data <- lapply(exif_files, read.exif)
+  if (length(exif_files) == 0){
+    stop("No *_exif.csv files found in ", path_exif_folder, ".")
+  }
+  exif_data <- lapply(exif_files, read.exif, log_fn = log_fn)
   
   combined_exif <- bind_rows(exif_data) %>%
     dplyr::rename(FolderSpeciesName = ScientificName) %>%
@@ -69,6 +74,10 @@ merging_exifs <- function(path_exif_folder, path_species_database, input_combine
                   paste(unique(check_date_before$Station_SamplingDate), collapse = ", ")))
   }
   
+  ## Formatted rather than written as POSIXct, so that midnight timings are printed
+  combined_exif_correct <- combined_exif_correct %>%
+    mutate(FileModifyDate = format(FileModifyDate, format = "%Y-%m-%d %H:%M:%S"))
+
   combined_path <- file.path(path_exif_folder, "combined_exif_all.csv")
   write.csv(combined_exif_correct, combined_path, row.names = F)
   log_fn("Merged exif data (all species) generated!")
@@ -83,9 +92,11 @@ merging_exifs <- function(path_exif_folder, path_species_database, input_combine
     filter(CT_TargetMammal %in% T) %>%
     unique()
     
-  # Read the editted combined_CT_data.csv if provided
+  # Read the editted combined_CT_data.csv if provided. It has usually been edited in Excel, so
+  # its DateTimes are parsed and written back as ISO for Step 3, just like the exifs
   if (!is.na(input_combined)){
-    combined_exif_correct <- read.csv(input_combined)
+    combined_exif_correct <- read.exif(input_combined, log_fn = log_fn, all_columns = TRUE) %>%
+      mutate(FileModifyDate = format(FileModifyDate, format = "%Y-%m-%d %H:%M:%S"))
   }
   
   mammals <- combined_exif_correct %>%

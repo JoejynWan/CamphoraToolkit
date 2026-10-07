@@ -543,7 +543,7 @@ ui <- page_navbar(
           textInput("s1a_offset",
                     label = tooltip(
                       span("Hours to offset, or correct anchor-video DateTime", bsicons::bs_icon("info-circle")),
-                      "Enter a number of hours (e.g. -12 or 5), OR the actual correct DateTime of the anchor video (e.g. 2025-11-13 08:00:00). The anchor is the first video, unless a video name is given below."
+                      "Enter a number of hours (e.g. -12 or 5), OR the actual correct DateTime of the anchor video (e.g. 2025-11-13 08:00:00, or 13/11/2025 8:00 AM). The anchor is the first video, unless a video name is given below."
                     ),
                     placeholder = "e.g. -12  or  2025-11-13 08:00:00"),
 
@@ -1537,7 +1537,12 @@ ui <- page_navbar(
               ),
               hr(),
               p(strong("Output:")),
-              tags$ul(tags$li("Same CSV as Step 1, with FileModifyDate/Date/Time shifted by the offset (for the affected videos only, if a video name was given)."))
+              tags$ul(tags$li("Same CSV as Step 1, with FileModifyDate/Date/Time shifted by the offset (for the affected videos only, if a video name was given).")),
+              hr(),
+              p(strong("Note:"), " an exif that has been opened and re-saved in Excel is read
+                correctly, whatever date format your machine wrote (22/02/2023, 2/22/2023,
+                dd-mmm-yyyy, AM/PM times). All rows in the output are written back as
+                YYYY-MM-DD HH:MM:SS, including the ones left untouched.")
             )
           ),
 
@@ -1556,7 +1561,12 @@ ui <- page_navbar(
               tags$ul(
                 tags$li(code("combined_exif_all.csv"), " — all species combined"),
                 tags$li(code("combined_exif_mammals_only.csv"), " — target mammals only")
-              )
+              ),
+              hr(),
+              p(strong("Note:"), " exif CSVs that have been opened and re-saved in Excel come back with
+                dates in your machine's format (e.g. 22/02/2023, 2/22/2023, dd-mmm-yyyy, AM/PM times).
+                These are read correctly and mixed freely with untouched files. A file whose dates
+                cannot be read unambiguously is reported in the log by name rather than guessed at.")
             )
           ),
 
@@ -1580,7 +1590,11 @@ ui <- page_navbar(
                 tags$li(code("ct_species_detection.xlsx")),
                 tags$li(code("ct_indp_det_wildboar_summary.csv"), " (if Sus scrofa present)"),
                 tags$li(code("ct_arboreal.xlsx"), " (if crossing remarks present)")
-              )
+              ),
+              hr(),
+              p(strong("Note:"), " a combined CSV that has been opened and re-saved in Excel is read
+                correctly, whatever date format your machine wrote (22/02/2023, 2/22/2023,
+                dd-mmm-yyyy, AM/PM times).")
             )
           )
         )
@@ -2323,7 +2337,8 @@ server <- function(input, output, session) {
           path_species_database = SPECIES_DB_PATH,
           indp_interval         = input$s3_indp_interval,
           rm_stations           = rm_stations,
-          log_fn                = s3_log
+          log_fn                = s3_log,
+          file_label            = input$s3_ct_file$name
         )
 
         output_dir        <- dirname(input$s3_ct_file$datapath)

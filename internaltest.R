@@ -48,8 +48,8 @@ BAT_SPECIES_DB_PATH <- "apps/BatRecordingProcessing/data/Species_Database_Bats.c
 
 
 #### CT Step 1: EXIF Extraction ####
-path_processed <- "G:/Shared drives/02_Archived_Projects_S-Z/Woodlands North Coast_DHI/02_Camera_Trapping/Camera_Trap_Data/02 Processed/20230116/CT09_20230116"
-path_raw       <- "G:/Shared drives/02_Archived_Projects_S-Z/Woodlands North Coast_DHI/02_Camera_Trapping/Camera_Trap_Data/01 Raw/20230116/CT09_20230116"
+path_processed <- "G:/Shared drives/02_Archived_Projects_S-Z/Woodlands North Coast_DHI/02_Camera_Trapping/Camera_Trap_Data/02 Processed/20221212"
+path_raw       <- "G:/Shared drives/02_Archived_Projects_S-Z/Woodlands North Coast_DHI/02_Camera_Trapping/Camera_Trap_Data/01 Raw/20221212"
 
 extract_exif(
   path_processed        = path_processed,
@@ -88,7 +88,7 @@ merging_exifs(
 
 #### CT Step 3: Independent Detections ####
 ## Uncomment and fill in path before running
-input_ct_file <- "G:/Shared drives/01_Current_Projects_S-Z/WCP EMMP ext infra/12_EMMP Analysis/CT data/combined_exif_all.csv"
+input_ct_file <- "G:/Shared drives/02_Archived_Projects_S-Z/Woodlands North Coast_DHI/02_Camera_Trapping/Camera_Trap_Data/02 Processed/combined_exif_all.csv"
 
 indp_dets(
   input_ct_file         = input_ct_file,
