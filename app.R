@@ -61,8 +61,8 @@ SPECIES_DB_PATH     <- "apps/CameraTrapProcessing/data/Species_Database.xlsx"
 IA_MATRIX_PATH      <- "apps/ImpactAssessment/data/ConsequenceSignificanceMatrix.xlsx"
 ARBO_RMD_PATH       <- "apps/ArboReport/modules/arboreport_full.Rmd"
 BAT_SPECIES_DB_PATH <- "apps/BatRecordingProcessing/data/Species_Database_Bats.csv"
-VERSION         <- "v2.8"
-UPDATE_DATE     <- "2026-08-04"
+VERSION         <- "v2.10"
+UPDATE_DATE     <- "2026-10-08"
 options(shiny.maxRequestSize = 30 * 1024^2)
 
 # ── Project Registry ──────────────────────────────────────────────────────────────────────────────
@@ -1947,7 +1947,16 @@ ui <- page_navbar(
 server <- function(input, output, session) {
 
   # ── Shared: shinyFiles volumes (all local drives including Google Drive G:) ─────────────────────
-  volumes <- c(Home = fs::path_home(), getVolumes()())
+  ## getVolumes() falls back to parsing PowerShell output on Windows builds without WMIC, and
+  ## errors if anything else (e.g. a PowerShell profile message) is printed first. Fall back to
+  ## probing drive letters directly. suppressWarnings() hides the "NAs introduced by coercion"
+  ## warning that precedes that error.
+  drive_volumes <- tryCatch(suppressWarnings(getVolumes()()), error = function(e) {
+    drives <- paste0(LETTERS, ":/")
+    drives <- drives[dir.exists(drives)]
+    setNames(drives, sub(":/", "", drives))
+  })
+  volumes <- c(Home = fs::path_home(), drive_volumes)
 
   shinyDirChoose(input, "s1_path_processed",     roots = volumes, session = session)
   shinyDirChoose(input, "s1_path_raw",           roots = volumes, session = session)
