@@ -30,6 +30,8 @@ source("apps/BatRecordingProcessing/recover_meta.R")
 source("apps/FloraPhotoFiling/modules/utils.R")
 source("apps/FloraPhotoFiling/sort_photos.R")
 source("apps/FloraPhotoFiling/resort_tag_dirs.R")
+source("apps/ArboReport_Excel/modules/utils.R")     # needs FloraPhotoFiling/modules/utils.R above
+source("apps/ArboReport_Excel/sort_photos.R")
 source("apps/CAGPhotoRenaming/rename_photos.R")
 
 install_load_packages(c(
@@ -48,8 +50,8 @@ BAT_SPECIES_DB_PATH <- "apps/BatRecordingProcessing/data/Species_Database_Bats.c
 
 
 #### CT Step 1: EXIF Extraction ####
-path_processed <- "G:/Shared drives/02_Archived_Projects_S-Z/Woodlands North Coast_DHI/02_Camera_Trapping/Camera_Trap_Data/02 Processed/20221212"
-path_raw       <- "G:/Shared drives/02_Archived_Projects_S-Z/Woodlands North Coast_DHI/02_Camera_Trapping/Camera_Trap_Data/01 Raw/20221212"
+path_processed <- "G:/Shared drives/01_Current_Projects_A-D/CR202 EMMP_Obayashi/02_Camera_Trapping/Camera_Trap_Data/02 Processed/Windsor Forest Monitoring/2026/20260916"
+path_raw       <- "G:/Shared drives/01_Current_Projects_A-D/CR202 EMMP_Obayashi/02_Camera_Trapping/Camera_Trap_Data/01 Raw/Windsor Forest Monitoring/2026/20260916"
 
 extract_exif(
   path_processed        = path_processed,
@@ -186,6 +188,25 @@ run_arbo_report(
   incl_crown_spread    = FALSE,
   sort_site            = FALSE,
   date_format          = "%d/%m/%y"
+)
+
+
+#### Arbo Report (Excel): Sort Photos ####
+## UNDER CONSTRUCTION. Uncomment and fill in paths before running
+arboxl_datasheet_path <- "C:/Users/joejyn/Downloads/Arbo_report_phase_1A_JO.xlsx"
+arboxl_photos_dir     <- "G:/Shared drives/01_Current_Projects_S-Z/Seletar East Arbo/06_Photos"
+arboxl_output_dir     <- "G:/Shared drives/01_Current_Projects_S-Z/Seletar East Arbo/08_Reports"
+
+## Prefix of the raw photo folders, e.g. "Seletar East_Photos" for "Seletar East_Photos_2026-05-25_SK"
+arboxl_photo_prefix <- "Seletar_East_Photos"
+
+sort_arbo_xl_photos(
+  datasheet_path = arboxl_datasheet_path,
+  photos_dir     = arboxl_photos_dir,
+  photo_prefix   = arboxl_photo_prefix,
+  output_dir     = arboxl_output_dir,
+  sheet_name     = NULL,     # NULL = first sheet
+  remove_stale   = TRUE
 )
 
 

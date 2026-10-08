@@ -55,6 +55,8 @@ source("apps/BatRecordingProcessing/recover_meta.R")
 source("apps/FloraPhotoFiling/modules/utils.R")
 source("apps/FloraPhotoFiling/sort_photos.R")
 source("apps/FloraPhotoFiling/resort_tag_dirs.R")
+source("apps/ArboReport_Excel/modules/utils.R")     # needs FloraPhotoFiling/modules/utils.R above
+source("apps/ArboReport_Excel/sort_photos.R")
 source("apps/CAGPhotoRenaming/rename_photos.R")
 
 SPECIES_DB_PATH     <- "apps/CameraTrapProcessing/data/Species_Database.xlsx"
@@ -119,8 +121,8 @@ PROJECTS <- list(
     icon        = "tree",
     category    = "Flora",
     status      = "live",
-    version     = "v2.5",
-    updated     = "2026-08-28"
+    version     = "v2.6",
+    updated     = "2026-10-08"
   ),
 
   list(
@@ -1002,6 +1004,83 @@ ui <- page_navbar(
                div(style = "overflow-x: auto;", tableOutput("arbo_preview_table")))
         )
       )
+    ),
+
+    # Excel Report: Sort Photos (under construction)
+    nav_panel(
+      title = icon_text("Excel Report: Sort Photos (Under construction)", "cone-striped"),
+      value = "arboxl_sort",
+
+      layout_sidebar(
+        fillable = TRUE,
+        sidebar = sidebar(
+          width = 340,
+
+          div(class = "alert alert-warning py-2 small mb-2",
+              bsicons::bs_icon("cone-striped"), strong(" Under construction."),
+              " Files photos for the arborist's working copy of the Excel arbo report. The full ",
+              "Excel report generator is still to come."),
+
+          h5("Input file", class = "fw-bold mt-1"),
+          fileInput("arboxl_datasheet_file",
+                    label = tooltip(
+                      span("Arbo report working copy (.xlsx)", bsicons::bs_icon("info-circle")),
+                      "Must contain Tree.ID, Date, Photos.by and Photo.no. columns."
+                    ),
+                    accept = ".xlsx", multiple = FALSE),
+          textInput("arboxl_sheet_name",
+                    label = tooltip(
+                      span("Sheet name (optional)", bsicons::bs_icon("info-circle")),
+                      "Leave blank to read the first sheet."
+                    ),
+                    placeholder = "e.g. Sheet1"),
+
+          hr(),
+          h5("Folders", class = "fw-bold mt-1"),
+          p(class = "mb-1",
+            tooltip(span("Raw photos folder", bsicons::bs_icon("info-circle")),
+                    "Folder containing per-inspection photo subfolders, e.g. 'Seletar East_Photos_2026-05-25_SK'.")),
+          shinyDirButton("arboxl_photos_dir", label = "Browse...",
+                         title = "Choose raw photos directory",
+                         class = "btn-outline-secondary w-100 mb-1"),
+          verbatimTextOutput("arboxl_photos_dir_display", placeholder = TRUE),
+
+          textInput("arboxl_photo_prefix",
+                    label = tooltip(
+                      span("Photo folder prefix", bsicons::bs_icon("info-circle")),
+                      "Prefix used in photo folder names, e.g. 'Seletar East_Photos' for 'Seletar East_Photos_2026-05-25_SK'."
+                    ),
+                    placeholder = "e.g. Seletar East_Photos"),
+
+          p(class = "mb-1 mt-2",
+            tooltip(span("Output folder", bsicons::bs_icon("info-circle")),
+                    "An 'ArboReportPhotos' folder is created here, with one subfolder per Tree.ID.")),
+          shinyDirButton("arboxl_output_dir", label = "Browse...",
+                         title = "Choose output directory",
+                         class = "btn-outline-secondary w-100 mb-1"),
+          verbatimTextOutput("arboxl_output_dir_display", placeholder = TRUE),
+
+          checkboxInput("arboxl_remove_stale",
+                        label = tooltip(
+                          span("Remove outdated photos", bsicons::bs_icon("info-circle")),
+                          "Delete photos in the ArboReportPhotos folder that the datasheet no longer refers to, e.g. after a photo number or Tree.ID was corrected."
+                        ),
+                        value = TRUE),
+
+          hr(),
+          actionButton("arboxl_run_btn",
+                       label = tagList(bsicons::bs_icon("play-fill"), " Sort Photos"),
+                       class = "btn-primary w-100")
+        ),
+
+        layout_column_wrap(
+          width = 1,
+          card(card_header(tagList(bsicons::bs_icon("terminal"), " Log")),
+               verbatimTextOutput("arboxl_log_output"), height = 220),
+          card(card_header(tagList(bsicons::bs_icon("table"), " Photos per tree")),
+               div(style = "overflow-x: auto;", tableOutput("arboxl_preview_table")))
+        )
+      )
     )
   ),
 
@@ -1733,6 +1812,26 @@ ui <- page_navbar(
               p(strong("Output:")),
               tags$ul(tags$li("Resized copies saved into the destination folder, preserving the original per-inspection subfolder structure."))
             )
+          ),
+
+          card(
+            card_header(tagList("Excel Report: Sort Photos ",
+                                tags$span(class = "proj-badge badge-beta", "Under construction"))),
+            card_body(
+              p("Files site photos into the ArboReportPhotos folder that goes with the Excel arbo report. This will later be part of a single script that generates the whole Excel report."),
+              tags$ol(
+                tags$li("Upload the ", strong("arbo report working copy"), " (.xlsx) — must contain ", code("Tree.ID"), ", ", code("Date"), ", ", code("Photos.by"), " and ", code("Photo.no."), "."),
+                tags$li("Select the ", strong("raw photos folder"), " and enter the photo folder prefix, e.g. ", code("Seletar East_Photos"), " for ", code("Seletar East_Photos_2026-05-25_SK"), "."),
+                tags$li("Select an ", strong("output folder"), "."),
+                tags$li("Click ", strong("Sort Photos"), ".")
+              ),
+              hr(),
+              p(strong("Output:")),
+              tags$ul(
+                tags$li(code("ArboReportPhotos/<Tree.ID>/<Tree.ID>_<photo name>"), ", e.g. ", code("ArboReportPhotos/SE0566/SE0566_P1150140.JPG"), "."),
+                tags$li("The log warns about trees where the number of photos found does not match their photo numbers.")
+              )
+            )
           )
         )
       ),
@@ -1966,6 +2065,8 @@ server <- function(input, output, session) {
   shinyDirChoose(input, "arbo_photos_dir",       roots = volumes, session = session)
   shinyDirChoose(input, "arbophoto_source_dir",  roots = volumes, session = session)
   shinyDirChoose(input, "arbophoto_dest_dir",    roots = volumes, session = session)
+  shinyDirChoose(input, "arboxl_photos_dir",     roots = volumes, session = session)
+  shinyDirChoose(input, "arboxl_output_dir",     roots = volumes, session = session)
   shinyDirChoose(input, "si_photos_dir",         roots = volumes, session = session)
   shinyDirChoose(input, "bat1_wav_dir",          roots = volumes, session = session)
   shinyDirChoose(input, "bat2_meta_dir",         roots = volumes, session = session)
@@ -2788,6 +2889,81 @@ server <- function(input, output, session) {
     if (length(arbophoto_rv$log_lines) == 0) "No output yet. Select folders and click Resize Photos."
     else paste(arbophoto_rv$log_lines, collapse = "\n")
   })
+
+
+  # ── Arbo Report: Excel Report Sort Photos (under construction) ──────────────────────────────────
+  arboxl_rv <- reactiveValues(
+    log_lines    = character(0),
+    preview_data = NULL
+  )
+  arboxl_log <- make_logger(arboxl_rv)
+
+  arboxl_photos_dir_path <- reactive({
+    req(input$arboxl_photos_dir)
+    parseDirPath(volumes, input$arboxl_photos_dir)
+  })
+
+  arboxl_output_dir_path <- reactive({
+    req(input$arboxl_output_dir)
+    parseDirPath(volumes, input$arboxl_output_dir)
+  })
+
+  output$arboxl_photos_dir_display <- renderText({
+    d <- tryCatch(arboxl_photos_dir_path(), error = function(e) "")
+    if (length(d) == 0 || d == "") "No folder selected." else d
+  })
+
+  output$arboxl_output_dir_display <- renderText({
+    d <- tryCatch(arboxl_output_dir_path(), error = function(e) "")
+    if (length(d) == 0 || d == "") "No folder selected." else d
+  })
+
+  observeEvent(input$arboxl_run_btn, {
+
+    arboxl_rv$log_lines    <- character(0)
+    arboxl_rv$preview_data <- NULL
+
+    photos_dir <- tryCatch(arboxl_photos_dir_path(), error = function(e) "")
+    output_dir <- tryCatch(arboxl_output_dir_path(), error = function(e) "")
+
+    if (is.null(input$arboxl_datasheet_file))         { arboxl_log("ERROR: No datasheet uploaded."); return() }
+    if (length(photos_dir) == 0 || photos_dir == "")  { arboxl_log("ERROR: Please select a raw photos folder."); return() }
+    if (trimws(input$arboxl_photo_prefix) == "")      { arboxl_log("ERROR: Please enter the photo folder prefix."); return() }
+    if (length(output_dir) == 0 || output_dir == "")  { arboxl_log("ERROR: Please select an output folder."); return() }
+
+    withProgress(message = "Sorting photos...", value = 0, {
+      tryCatch({
+
+        incProgress(0.1)
+
+        summary_df <- sort_arbo_xl_photos(
+          datasheet_path = input$arboxl_datasheet_file$datapath,
+          photos_dir     = photos_dir,
+          photo_prefix   = trimws(input$arboxl_photo_prefix),
+          output_dir     = output_dir,
+          sheet_name     = trimws(input$arboxl_sheet_name),
+          remove_stale   = input$arboxl_remove_stale,
+          log            = arboxl_log
+        )
+
+        incProgress(0.8)
+        arboxl_rv$preview_data <- summary_df
+        arboxl_log(paste("Done! Photos filed into:", file.path(output_dir, "ArboReportPhotos")))
+
+      }, error = function(e) arboxl_log(paste("ERROR:", conditionMessage(e))))
+    })
+  })
+
+  output$arboxl_log_output <- renderText({
+    if (length(arboxl_rv$log_lines) == 0)
+      "No output yet. Upload the working copy, select folders and click Sort Photos."
+    else paste(arboxl_rv$log_lines, collapse = "\n")
+  })
+
+  output$arboxl_preview_table <- renderTable({
+    req(arboxl_rv$preview_data)
+    arboxl_rv$preview_data
+  }, striped = TRUE, hover = TRUE, bordered = TRUE, na = "")
 
 
   # ── Stream Inspection Report ────────────────────────────────────────────────────────────────────
