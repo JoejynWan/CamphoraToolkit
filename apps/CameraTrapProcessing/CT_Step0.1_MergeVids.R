@@ -4,7 +4,7 @@
 rm(list=ls())
 library(tidyverse)
 
-dir_path <- "I:/DCIM/"
+dir_path <- "G:/Shared drives/01_Current_Projects_A-D/CR203 EMMP_Obayashi/02_Camera_Trapping/Camera_Trap_Data/01 Raw/24 - October 2026/20261007/CT Swiss_20261007/"
 
 vids <- data.frame(From = list.files(dir_path, recursive = T, 
                                          full.names = T)) %>%

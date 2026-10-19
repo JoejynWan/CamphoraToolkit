@@ -24,26 +24,26 @@ extract_exif <- function(path_processed, path_raw, path_species_database, log_fn
   ## IDs from Timelapse
   ddb_paths <- list.files(path_processed, recursive = T, pattern = "*.ddb", full.names = T)
   
+  ddb_paths <- ddb_paths[!grepl("Backups", ddb_paths)]
+
   if (length(ddb_paths) == 0){
     no_timelapse_sorts <- T
-    ddb_stations <- NA
-    
+
   } else {
     no_timelapse_sorts <- F
-    
-    ddb_paths <- ddb_paths[!grepl("Backups", ddb_paths)]
-    
+
     ddb_data <- lapply(ddb_paths, get_id_timelapse, log = log_fn) %>%
       bind_rows() %>%
       filter(!grepl("unreadable_file", RelativePath))
-    
-    ddb_stations <- basename(dirname(ddb_paths))
   }
-    
-  ## IDs from manual method
+
+  ## IDs from manual method: every video not in a folder with a Timelapse ddb
   vid_paths <- list.files(path_processed, recursive = T,
                           pattern = "(*.AVI|*.MP4|*.MOV|*.avi|*.JPG|*.jpg)", full.names = T)
-  manual_vid_paths <- vid_paths[!grepl(paste(ddb_stations, collapse = "|"), vid_paths)]
+  in_timelapse_dir <- vapply(vid_paths, function(p) {
+    any(startsWith(p, paste0(dirname(ddb_paths), "/")))
+  }, logical(1), USE.NAMES = F)
+  manual_vid_paths <- vid_paths[!in_timelapse_dir]
   
   if (length(manual_vid_paths) == 0){
     no_manual_sorts <- T
@@ -125,12 +125,31 @@ extract_exif <- function(path_processed, path_raw, path_species_database, log_fn
   
   dat_raw_datetime <- dat_raw %>%
     select(FileName, Directory, FileModifyDate) %>%
-    mutate(Station_SampleDate = basename(Directory)) %>%
-    unite(col = "UniqueFileName", Station_SampleDate, FileName, sep = "_", remove = F) %>%
-    select(UniqueFileName, FileModifyDate) %>%
-    unique()
-  
-  
+    mutate(RawPath = file.path(Directory, FileName),
+           UniqueFileName = station_file_key(RawPath))
+
+  check_station_found(dat_raw_datetime$RawPath, dat_raw_datetime$UniqueFileName, "raw")
+
+  ## Each raw video must be identifiable by its path from the Station_SampleDate folder down,
+  ## otherwise processed videos could pick up the date and time of the wrong one
+  dup_raw <- unique(dat_raw_datetime$UniqueFileName[duplicated(dat_raw_datetime$UniqueFileName)])
+  if (length(dup_raw) > 0) {
+    stop("These raw videos/images appear more than once under the same Station_SampleDate ",
+         "folder name, so their dates and times cannot be told apart:\n",
+         paste(head(dup_raw, 10), collapse = "\n"),
+         if (length(dup_raw) > 10) paste0("\n...and ", length(dup_raw) - 10, " more") else "",
+         "\nPlease check that the raw folder contains each Station_SampleDate folder only once.")
+  }
+
+  dat_raw_datetime <- select(dat_raw_datetime, UniqueFileName, FileModifyDate)
+
+  ## Processed videos may sit in a species folder that raw videos are not in. Use the full
+  ## path if raw has it (e.g. camera folders only), otherwise the path without that folder.
+  dat_processed_qty <- dat_processed_qty %>%
+    mutate(UniqueFileName = ifelse(FileKey %in% dat_raw_datetime$UniqueFileName,
+                                   FileKey, FileKeyNoParent))
+
+
   #### Correcting DateTime ####
   dat_correctDT <- merge(dat_processed_qty, dat_raw_datetime, by = "UniqueFileName")%>%
     #convert date time so excel can read them
@@ -150,19 +169,14 @@ extract_exif <- function(path_processed, path_raw, path_species_database, log_fn
   ## Checking that all the processed videos are included in the exif.csv output
   if(nrow(dat_correctDT) != nrow(dat_processed)) {
     
-    processed_vids <- dat_processed$UniqueFileName
-    raw_vids <- dat_raw_datetime$UniqueFileName
-    missing_vids <- processed_vids[!processed_vids %in% raw_vids]
-    
-    missing_vids_location <- filter(dat_processed, UniqueFileName %in% missing_vids) %>%
-      mutate(Path1 = basename(dirname(FullPath)),
-             Path2 = basename(dirname(dirname(FullPath))),
-             Path3 = basename(dirname(dirname(dirname(FullPath)))),
-             Location = file.path(Path3, Path2, Path1, FileName))
-    
-    stop(paste("Some processed videos cannot be matched in the raw folder.", 
-               "Please ensure that the names of the videos and Station_SamplingDate folders in the",
-               "processed and raw folders are exactly the same:\n", 
+    missing_vids_location <- dat_processed_qty %>%
+      filter(!UniqueFileName %in% dat_raw_datetime$UniqueFileName) %>%
+      mutate(Location = station_file_key(FullPath))
+
+    stop(paste("Some processed videos cannot be matched in the raw folder.",
+               "Please ensure that the names of the videos, the Station_SamplingDate folders and",
+               "any camera folders (e.g. 100RECNX) in the processed and raw folders are",
+               "exactly the same:\n",
                paste(missing_vids_location$Location, collapse = "\n"), sep = " "))
   }
   

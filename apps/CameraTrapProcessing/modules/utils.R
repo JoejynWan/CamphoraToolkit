@@ -89,6 +89,62 @@ read_exif_parallel <- function(dir_path){
 }
 
 
+#### Matching processed videos to raw ones ####
+## Station_SampleDate folders are named "<Station>_<YYYYMMDD>", optionally followed by
+## "_<remarks>". Videos may sit directly in them, or further down in camera folders (e.g.
+## 100RECNX, 101RECNX) and/or species folders. Camera folders reuse the same video names
+## (RCNX0001.AVI in each), so a video is identified by its path from the Station_SampleDate
+## folder down rather than by Station_SampleDate and name alone.
+STATION_DIR_PATTERN <- "^.+_[[:digit:]]{8}(_.*)?$"
+
+
+## Splits each file path at its Station_SampleDate folder, the nearest folder above the file
+## that is named like one. Gives NA for the station when no such folder is found.
+locate_in_station <- function(file_paths){
+  parts <- strsplit(gsub("\\\\", "/", file_paths), "/+")
+
+  lapply(parts, function(p){
+    dirs <- head(p, -1)
+    k    <- tail(which(grepl(STATION_DIR_PATTERN, dirs)), 1)
+
+    if (length(k) == 0) {
+      return(list(station = NA_character_, subdirs = character(0), file = tail(p, 1)))
+    }
+    list(station = dirs[k], subdirs = dirs[-seq_len(k)], file = tail(p, 1))
+  })
+}
+
+
+## Name of the Station_SampleDate folder each file is in
+station_sampledate_of <- function(file_paths){
+  vapply(locate_in_station(file_paths), `[[`, character(1), "station")
+}
+
+
+## Path of each file from its Station_SampleDate folder down, e.g.
+## "CT1_20260901/100RECNX/RCNX0001.AVI". drop_parent = TRUE leaves out the folder directly
+## above the file, which on the processed side is the species folder.
+station_file_key <- function(file_paths, drop_parent = FALSE){
+  vapply(locate_in_station(file_paths), function(x){
+    if (is.na(x$station)) return(NA_character_)
+
+    subdirs <- if (drop_parent) head(x$subdirs, -1) else x$subdirs
+    paste(c(x$station, subdirs, x$file), collapse = "/")
+  }, character(1))
+}
+
+
+## Stops if any file is not inside a folder named like Station_YYYYMMDD
+check_station_found <- function(file_paths, stations, where){
+  if (any(is.na(stations))) {
+    stop("Cannot find the Station_SampleDate folder (named like Station_YYYYMMDD) for these ",
+         where, " videos/images:\n",
+         paste(head(unique(dirname(file_paths[is.na(stations)])), 10), collapse = "\n"),
+         "\nPlease check the folder names.")
+  }
+}
+
+
 check_animal_captures_dir <- function(manual_data){
   animal_captures <- manual_data %>%
     filter(FolderSpeciesName %in% "Animal captures") %>%

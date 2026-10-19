@@ -50,8 +50,8 @@ BAT_SPECIES_DB_PATH <- "apps/BatRecordingProcessing/data/Species_Database_Bats.c
 
 
 #### CT Step 1: EXIF Extraction ####
-path_processed <- "G:/Shared drives/01_Current_Projects_A-D/CR202 EMMP_Obayashi/02_Camera_Trapping/Camera_Trap_Data/02 Processed/Windsor Forest Monitoring/2026/20260916"
-path_raw       <- "G:/Shared drives/01_Current_Projects_A-D/CR202 EMMP_Obayashi/02_Camera_Trapping/Camera_Trap_Data/01 Raw/Windsor Forest Monitoring/2026/20260916"
+path_processed <- "G:/Shared drives/01_Current_Projects_A-D/CR203 EMMP_Obayashi/02_Camera_Trapping/Camera_Trap_Data/02 Processed/23 - September 2026/20260901/CT Swiss_20260901/"
+path_raw       <- "G:/Shared drives/01_Current_Projects_A-D/CR203 EMMP_Obayashi/02_Camera_Trapping/Camera_Trap_Data/01 Raw/23 - September 2026/20260901/CT Swiss_20260901/"
 
 extract_exif(
   path_processed        = path_processed,
@@ -278,9 +278,9 @@ recover_bat_meta(
 
 
 #### Flora Photo Filing: Sort Photos ####
-flora_datasheet_path <- "G:/Shared drives/01_Current_Projects_A-D/BTNR_NParks/02_Data/Flora_and_Arboriculture/Main data files/BTNR_Master data_v141_JM.xlsx"
+flora_datasheet_path <- "C:/Users/joejyn/Downloads/FABACEAE_OTHERS.xlsx"
 flora_photos_dir     <- "G:/Shared drives/01_Current_Projects_A-D/BTNR_NParks/06_Photos/Flora_and_Arboriculture"
-flora_sorted_dir     <- "G:/Shared drives/01_Current_Projects_A-D/BTNR_NParks/08_Reports/02 Interim Reports/Interim Report 4/BTNR_Interim Report 4_Photos_Batch 4.3"
+flora_sorted_dir     <- "G:/Shared drives/01_Current_Projects_A-D/BTNR_NParks/08_Reports/02 Interim Reports/Interim Report 4/Fabaceae_Others"
 
 flora_status_to_sort <- c("To sort (Batch 4.3)")
 

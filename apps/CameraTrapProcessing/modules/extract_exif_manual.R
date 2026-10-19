@@ -14,11 +14,12 @@ read_video_paths <- function(dir_path){
 get_id_manual <- function(video_paths){
   
   data_manual <- data.frame(FullPath = video_paths) %>%
-    mutate(FileName = basename(FullPath), 
-           Station_SampleDate = basename(dirname(dirname(FullPath)))) %>%
-    # UniqueFileName will be used to get date and time from raw videos
-    unite(col = "UniqueFileName", Station_SampleDate, FileName, 
-          sep = "_", remove = F) %>%
+    mutate(FileName = basename(FullPath),
+           Station_SampleDate = station_sampledate_of(FullPath),
+           # FileKey will be used to get date and time from raw videos. The folder directly
+           # above each video is always its species folder, which raw folders do not have.
+           FileKey = station_file_key(FullPath, drop_parent = TRUE),
+           FileKeyNoParent = FileKey) %>%
     # Extract station and sampling date
     separate(Station_SampleDate, 
              into = c("Station", "SamplingDate", "StationRemarks"), 
@@ -29,6 +30,8 @@ get_id_manual <- function(video_paths){
              sep = " ", extra = "merge", fill = "right", remove = FALSE) %>% 
     unite(col="FolderSpeciesName", Genus, Sp., sep=" ") %>%
     select(-Species_Qty)
-  
+
+  check_station_found(data_manual$FullPath, data_manual$Station_SampleDate, "processed")
+
   return(data_manual)
 }
