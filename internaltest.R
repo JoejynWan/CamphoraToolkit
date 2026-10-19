@@ -5,6 +5,7 @@ rm(list = ls())
 setwd("C:/Users/Joejyn/OneDrive/Camphora/Data_analysis/CamphoraToolkitHub_Git/")
 
 source("apps/CameraTrapProcessing/modules/utils.R")
+source("apps/CameraTrapProcessing/CT_Step0.1_MergeVids.R")
 source("apps/CameraTrapProcessing/CT_Step1_ExtractExif.R")
 source("apps/CameraTrapProcessing/CT_Step1.1_OffsetDateTime.R")
 source("apps/CameraTrapProcessing/CT_Step2_MergeExifs.R")
@@ -47,6 +48,19 @@ SPECIES_DB_PATH     <- "apps/CameraTrapProcessing/data/Species_Database.xlsx"
 IA_MATRIX_PATH      <- "apps/ImpactAssessment/data/ConsequenceSignificanceMatrix.xlsx"
 ARBO_RMD_PATH       <- "apps/ArboReport/modules/arboreport_full.Rmd"
 BAT_SPECIES_DB_PATH <- "apps/BatRecordingProcessing/data/Species_Database_Bats.csv"
+
+
+#### CT Step 0.1: Merge Videos ####
+## Raw Station_SampleDate folder whose videos are split across camera folders (e.g. 100RECNX)
+## Uncomment and fill in path before running
+# ct_station_dir <- "G:/Shared drives/01_Current_Projects_A-D/CR203 EMMP_Obayashi/02_Camera_Trapping/Camera_Trap_Data/01 Raw/24 - October 2026/20261007/CT Swiss_20261007/"
+
+ct_merge_mode <- "dry_run"   # "dry_run" -> preview only | "copy" -> keep originals | "move" -> remove originals
+
+merge_ct_videos(
+  station_dir = ct_station_dir,
+  mode        = ct_merge_mode
+)
 
 
 #### CT Step 1: EXIF Extraction ####

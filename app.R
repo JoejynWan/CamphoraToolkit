@@ -30,6 +30,7 @@ library(tidyverse)
 library(shinyFiles)
 
 source("apps/CameraTrapProcessing/modules/utils.R")
+source("apps/CameraTrapProcessing/CT_Step0.1_MergeVids.R")
 source("apps/CameraTrapProcessing/CT_Step1_ExtractExif.R")
 source("apps/CameraTrapProcessing/CT_Step1.1_OffsetDateTime.R")
 source("apps/CameraTrapProcessing/CT_Step2_MergeExifs.R")
@@ -64,7 +65,7 @@ IA_MATRIX_PATH      <- "apps/ImpactAssessment/data/ConsequenceSignificanceMatrix
 ARBO_RMD_PATH       <- "apps/ArboReport/modules/arboreport_full.Rmd"
 BAT_SPECIES_DB_PATH <- "apps/BatRecordingProcessing/data/Species_Database_Bats.csv"
 VERSION         <- "v2.10"
-UPDATE_DATE     <- "2026-10-08"
+UPDATE_DATE     <- "2026-10-19"
 options(shiny.maxRequestSize = 30 * 1024^2)
 
 # ── Project Registry ──────────────────────────────────────────────────────────────────────────────
@@ -108,7 +109,7 @@ PROJECTS <- list(
     icon        = "camera",
     category    = "Fauna",
     status      = "live",
-    version     = "v2.3",
+    version     = "v2.4",
     updated     = "2026-10-19"
   ),
 
@@ -475,6 +476,55 @@ ui <- page_navbar(
   # ── Camera Traps ────────────────────────────────────────────────────────────────────────────────
   nav_menu(
     title = icon_text("Camera Traps", "camera"),
+
+    # Step 0.1: Merge Videos
+    nav_panel(
+      title = icon_text("Step 0.1: Merge Videos", "folder-symlink"),
+      value = "ct_step0_1",
+
+      layout_sidebar(
+        fillable = TRUE,
+        sidebar = sidebar(
+          width = 340,
+
+          p(class = "small text-muted",
+            "Only needed when a camera saved its videos into several folders (e.g. 100RECNX,
+             101RECNX). Run this on the raw Station_SampleDate folder before ID-ing."),
+
+          h5("Input folder", class = "fw-bold mt-1"),
+
+          p(class = "mb-1",
+            tooltip(span("Station_SampleDate folder", bsicons::bs_icon("info-circle")),
+                    "The raw station folder (e.g. CT1_20261007) holding the camera folders, not a camera folder itself.")),
+          shinyDirButton("s01_station_dir", label = "Browse...",
+                         title = "Choose the Station_SampleDate folder",
+                         class = "btn-outline-secondary w-100 mb-1"),
+          verbatimTextOutput("s01_station_dir_display", placeholder = TRUE),
+
+          hr(),
+          h5("Mode", class = "fw-bold mt-1"),
+          radioButtons("s01_mode",
+                       label = NULL,
+                       choices = c("Preview only (no changes)" = "dry_run",
+                                   "Copy (keep the original folders)" = "copy",
+                                   "Move (remove the original folders)" = "move"),
+                       selected = "dry_run"),
+
+          hr(),
+          actionButton("s01_run_btn",
+                       label = tagList(bsicons::bs_icon("play-fill"), " Run"),
+                       class = "btn-primary w-100")
+        ),
+
+        layout_column_wrap(
+          width = 1,
+          card(card_header(tagList(bsicons::bs_icon("terminal"), " Log")),
+               verbatimTextOutput("s01_log_output"), height = 200),
+          card(card_header(tagList(bsicons::bs_icon("table"), " Renaming plan")),
+               div(style = "overflow-x: auto;", tableOutput("s01_preview_table")))
+        )
+      )
+    ),
 
     # Step 1: EXIF Extraction
     nav_panel(
@@ -1588,6 +1638,31 @@ ui <- page_navbar(
           width = 1 / 2,
 
           card(
+            card_header("Step 0.1: Merge Videos"),
+            card_body(
+              p("Only needed when a camera saved its videos into several folders (e.g. ",
+                code("100RECNX"), ", ", code("101RECNX"), ") that reuse the same video names.
+                Renames and merges them into the Station_SampleDate folder, numbered on in folder
+                order, so every video has a unique name. Run it on the raw folder before ID-ing."),
+              tags$ol(
+                tags$li("Select the raw ", strong("Station_SampleDate"), " folder (e.g. ", code("CT1_20261007"), "), not a camera folder."),
+                tags$li("Run as ", strong("Preview only"), " and check the renaming plan."),
+                tags$li("Re-run as ", strong("Copy"), " (keeps the original folders) or ", strong("Move"), " (removes them once emptied)."),
+                tags$li("ID the merged videos as usual, then carry on with Step 1.")
+              ),
+              hr(),
+              p(strong("Output:")),
+              tags$ul(
+                tags$li("Videos renamed e.g. ", code("RCNX0001.AVI"), " onwards, directly in the station folder, with their original modified dates (used by Step 1 for the date and time)."),
+                tags$li(code("<Station_SampleDate>_merged_videos.csv"), " — which original video became which new name.")
+              ),
+              hr(),
+              p(strong("Note:"), " folders that were not merged still work in Step 1, but the
+                camera folders must then be kept exactly the same in the processed and raw folders.")
+            )
+          ),
+
+          card(
             card_header("Step 1: EXIF Extraction"),
             card_body(
               p("Extracts and merges metadata from processed (Timelapse / manually sorted) and raw video folders."),
@@ -2057,6 +2132,7 @@ server <- function(input, output, session) {
   })
   volumes <- c(Home = fs::path_home(), drive_volumes)
 
+  shinyDirChoose(input, "s01_station_dir",       roots = volumes, session = session)
   shinyDirChoose(input, "s1_path_processed",     roots = volumes, session = session)
   shinyDirChoose(input, "s1_path_raw",           roots = volumes, session = session)
   shinyDirChoose(input, "s2_exif_folder",        roots = volumes, session = session)
@@ -2185,6 +2261,61 @@ server <- function(input, output, session) {
     filename = function() paste0("IA_output_", format(Sys.Date(), "%Y%m%d"), ".xlsx"),
     content  = function(file) { req(ia_rv$output_path); file.copy(ia_rv$output_path, file) }
   )
+
+
+  # ── CT Step 0.1: Merge Videos ───────────────────────────────────────────────────────────────────
+  s01_rv <- reactiveValues(
+    log_lines    = character(0),
+    preview_data = NULL
+  )
+  s01_log <- make_logger(s01_rv)
+
+  s01_station_dir <- reactive({
+    req(input$s01_station_dir)
+    parseDirPath(volumes, input$s01_station_dir)
+  })
+
+  output$s01_station_dir_display <- renderText({
+    d <- tryCatch(s01_station_dir(), error = function(e) "")
+    if (length(d) == 0 || d == "") "No folder selected" else d
+  })
+
+  observeEvent(input$s01_run_btn, {
+    s01_rv$log_lines    <- character(0)
+    s01_rv$preview_data <- NULL
+
+    station_dir <- tryCatch(s01_station_dir(), error = function(e) "")
+    if (length(station_dir) == 0 || station_dir == "") { s01_log("ERROR: Please select a Station_SampleDate folder."); return() }
+
+    withProgress(message = "Merging videos...", value = 0, {
+      tryCatch({
+        s01_rv$preview_data <- merge_ct_videos(
+          station_dir = station_dir,
+          mode        = input$s01_mode,
+          log_fn      = s01_log,
+          progress    = function(i, n) setProgress(i / n, detail = paste(i, "of", n))
+        )
+        setProgress(1)
+
+        if (input$s01_mode == "dry_run") {
+          s01_log("Done! This was a preview — re-run as Copy or Move to apply.")
+        } else {
+          s01_log("Done! The videos are ready for ID-ing.")
+        }
+
+      }, error = function(e) s01_log(paste("ERROR:", conditionMessage(e))))
+    })
+  })
+
+  output$s01_log_output <- renderText({
+    if (length(s01_rv$log_lines) == 0) "No output yet. Select a folder and click Run."
+    else paste(s01_rv$log_lines, collapse = "\n")
+  })
+
+  output$s01_preview_table <- renderTable({
+    req(s01_rv$preview_data)
+    s01_rv$preview_data
+  }, striped = TRUE, hover = TRUE, bordered = TRUE, na = "")
 
 
   # ── CT Step 1: EXIF Extraction ──────────────────────────────────────────────────────────────────
