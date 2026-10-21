@@ -3244,8 +3244,8 @@ server <- function(input, output, session) {
         if (dir.exists(sorted_out)) {
           zip_path <- file.path(tempdir(), "bat_sorted_wav.zip")
           if (file.exists(zip_path)) unlink(zip_path)
-          zip::zip(zip_path, files = list.files(sorted_out, recursive = TRUE, full.names = TRUE),
-                   mode = "cherry-pick")
+          ## Zip relative to sorted_out so species subfolders are kept
+          zip::zip(zip_path, files = list.files(sorted_out), root = sorted_out)
           bat1_rv$zip_path <- zip_path
           bat1_log("Sorted .wav files zipped for download.")
         }
